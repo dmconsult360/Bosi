@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planner Bosi — Wall Display</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:      #0c0c0a;
+  --surface: #141412;
+  --s2:      #1c1c18;
+  --border:  #282822;
+  --b2:      #323228;
+  --text:    #eeebe0;
+  --muted:   #6a6860;
+  --font-h:  'Syne', sans-serif;
+  --font-b:  'DM Sans', sans-serif;
+  --today:   #d4a843;
+  --fs-op:    18px;
+  --fs-task:  16px;
+  --fs-site:  13px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-b); overflow: hidden; }
+
+/* ── LOGIN ── */
+#login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card { width: 360px; padding: 44px 36px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.login-logo { display: block; height: 48px; width: auto; margin-bottom: 24px; }
+.login-card h1 { font-family: var(--font-h); font-size: 22px; color: var(--today); margin-bottom: 6px; }
+.login-card p { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.field input { padding: 10px 12px; background: var(--s2); border: 1px solid var(--b2); border-radius: 8px; color: var(--text); font-family: var(--font-b); font-size: 14px; }
+.field input:focus { outline: none; border-color: var(--today); }
+.btn-login { width: 100%; padding: 11px; background: var(--today); color: #0c0c0a; font-family: var(--font-h); font-weight: 700; font-size: 14px; border: none; border-radius: 8px; cursor: pointer; margin-top: 6px; }
+.login-err { color: #e05555; font-size: 12px; margin-top: 8px; min-height: 18px; }
+
+/* ── WALL DISPLAY ── */
+#app { display: none; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 64px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.brand { display: flex; align-items: center; }
+.brand img { height: 36px; width: auto; }
+.topbar-center { display: flex; flex-direction: column; align-items: center; }
+.week-label { font-family: var(--font-h); font-size: 15px; font-weight: 700; color: #ffffff; }
+.week-range { font-size: 12px; font-weight: 700; color: var(--muted); }
+.topbar-right { display: flex; align-items: center; gap: 18px; }
+.clock { font-family: var(--font-h); font-size: 26px; font-weight: 700; color: #ffffff; letter-spacing: 1px; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: #4caf82; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+.btn-logout { background: transparent; border: none; color: #ffffff; font-weight: 700; cursor: pointer; font-size: 13px; }
+
+/* ── NAV GIORNI ── */
+.day-nav { display: flex; align-items: center; gap: 10px; padding: 10px 28px; background: var(--s2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.btn-d { background: var(--surface); border: 1px solid var(--b2); color: #ffffff; font-weight: 700; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+.btn-d:hover { border-color: var(--today); color: var(--today); }
+.btn-d.today-btn { margin-left: 4px; }
+
+.search-wrap { position: relative; margin-left: auto; width: 340px; }
+.search-input { width: 100%; padding: 8px 34px 8px 14px; background: var(--surface); border: 1px solid var(--b2); border-radius: 8px; color: var(--text); font-family: var(--font-b); font-size: 14px; }
+.search-input:focus { outline: none; border-color: var(--today); }
+.search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; pointer-events: none; }
+.search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; display: none; padding: 4px; }
+.search-results { position: absolute; top: calc(100% + 6px); right: 0; width: 460px; max-height: 440px; overflow-y: auto; background: var(--surface); border: 1px solid var(--b2); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 200; display: none; }
+.search-results.show { display: block; }
+.sr-empty, .sr-hint { padding: 16px; color: var(--muted); font-size: 13px; text-align: center; }
+.sr-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.sr-item:hover { background: var(--s2); }
+.sr-item-top { display: flex; align-items: center; gap: 8px; }
+.sr-squad-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sr-title { font-family: var(--font-h); font-weight: 700; font-size: 13px; color: #ffffff; }
+.sr-meta { font-size: 11px; color: var(--muted); }
+.sr-snippet { font-size: 12px; color: var(--muted); }
+.sr-snippet mark { background: var(--today); color: #0c0c0a; border-radius: 2px; padding: 0 1px; }
+.task-card.search-highlight { box-shadow: 0 0 0 2px var(--today); animation: highlightPulse 1.4s ease 2; }
+@keyframes highlightPulse { 0%,100% { box-shadow: 0 0 0 2px var(--today); } 50% { box-shadow: 0 0 0 4px var(--today); } }
+
+/* ── GRIGLIA 2 GIORNI ── */
+.days-header { display: grid; grid-template-columns: 200px repeat(2, 1fr); background: var(--surface); border-bottom: 2px solid var(--b2); flex-shrink: 0; transition: transform .35s ease; }
+.day-head { padding: 14px 20px; font-family: var(--font-h); font-size: 16px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: .8px; }
+.day-head:first-child { border-right: 2px solid var(--b2); }
+.day-head.today-col { color: var(--today); }
+.day-head.holiday-col { color: #e05555; }
+.day-head .dt { display: block; font-size: 13px; color: var(--muted); font-weight: 700; margin-top: 2px; font-family: var(--font-b); text-transform: none; letter-spacing: 0; }
+.day-head .hol-label { display: block; font-size: 12px; color: #e05555; font-weight: 700; margin-top: 2px; }
+
+.squads-scroll { flex: 1; overflow-y: auto; }
+.squad-row { display: grid; grid-template-columns: 200px repeat(2, 1fr); border-bottom: 1px solid var(--border); min-height: 110px; transition: transform .35s ease; }
+.squad-label { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-right: 2px solid var(--b2); background: var(--s2); }
+.squad-bar { width: 5px; border-radius: 2px; align-self: stretch; flex-shrink: 0; }
+.squad-name-text { font-family: var(--font-h); font-size: var(--fs-op); font-weight: 700; color: #ffffff; }
+.day-cell { padding: 10px 14px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.day-cell.today-col { background: rgba(212,168,67,.04); }
+.day-cell.holiday-col { background: rgba(224,85,85,.04); }
+
+.task-card { border-radius: 8px; padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; border: 1px solid transparent; }
+.task-card-title { font-size: var(--fs-task); font-weight: 600; line-height: 1.3; }
+.task-card-notes { font-size: calc(var(--fs-task) - 2px); opacity: .9; color: #ffffff; font-weight: 500; line-height: 1.3; }
+.task-card-site { font-size: var(--fs-site); opacity: .7; }
+.task-card-mats { margin-top: 3px; }
+.mat-tag { display: inline-block; background: rgba(0,0,0,.25); border-radius: 4px; padding: 2px 8px; font-size: calc(var(--fs-site) - 1px); margin: 1px 3px 1px 0; }
+.empty-cell { color: #ffffff; font-size: 13px; font-weight: 600; padding: 4px 0; opacity: .35; }
+.holiday-flag { color: #e05555; font-size: 13px; font-weight: 700; opacity: .8; }
+
+.loading { color: #ffffff; font-weight: 600; padding: 60px; text-align: center; font-size: 14px; }
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface); border: 1px solid var(--b2); border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 700; color: #ffffff; z-index: 300; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.toast.show { opacity: 1; }
+::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 4px; }
+
+/* transizione slide tra i giorni */
+.slide-out-left  { transform: translateX(-30px); opacity: .3; }
+.slide-out-right { transform: translateX(30px); opacity: .3; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <img src="logo.png" alt="Bosi Logo" class="login-logo" onerror="this.style.display='none'">
+    <h1>⬡ Wall Display</h1>
+    <p>Accesso sola lettura</p>
+    <div class="field"><label>Email</label><input type="email" id="l-email" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn-login" onclick="doLogin()">Accedi</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <span class="brand"><img src="logo.png" alt="Bosi" onerror="this.style.display='none'"></span>
+    <div class="topbar-center">
+      <span class="week-label" id="week-label"></span>
+      <span class="week-range" id="week-range"></span>
+    </div>
+    <div class="topbar-right">
+      <div class="live-dot" title="Aggiornamento in tempo reale"></div>
+      <span class="clock" id="clock">--:--</span>
+      <button class="btn-logout" onclick="doLogout()">Esci</button>
+    </div>
+  </div>
+
+  <div class="day-nav">
+    <button class="btn-d" onclick="shiftDay(-1)">◀ giorno precedente</button>
+    <button class="btn-d today-btn" onclick="goToday()">Oggi</button>
+    <button class="btn-d" onclick="shiftDay(1)">giorno successivo ▶</button>
+    <div class="search-wrap">
+      <input type="text" class="search-input" id="search-input" placeholder="Cerca in tutti i testi..." autocomplete="off">
+      <span class="search-icon">🔍</span>
+      <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <div class="days-header" id="days-header"></div>
+  <div class="squads-scroll">
+    <div class="loading" id="cal-loading">Caricamento calendario...</div>
+    <div id="cal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// CONFIGURAZIONE — stesso progetto Supabase del manager
+// ══════════════════════════════════════════
+const SUPABASE_URL      = 'INSERISCI_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'INSERISCI_SUPABASE_ANON_KEY';
+// ══════════════════════════════════════════
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const DAY_NAMES = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+let anchorDate = todayMidnight();
+let squads = [], sites = [], holidays = [], tasks = [], materials = [];
+
+function todayMidnight() { const d = new Date(); d.setHours(0,0,0,0); return d; }
+function fmtDate(d) { return d.toISOString().slice(0,10); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function escHtml(s) { return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function isSameDay(a, b) { return fmtDate(a) === fmtDate(b); }
+function isoWeekNum(d) { const t = new Date(d); t.setHours(0,0,0,0); t.setDate(t.getDate() + 3 - ((t.getDay()+6)%7)); const w1 = new Date(t.getFullYear(),0,4); return 1 + Math.round(((t-w1)/86400000 - 3 + ((w1.getDay()+6)%7))/7); }
+
+// ── AUTH ───────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const pass = document.getElementById('l-pass').value;
+  document.getElementById('login-err').textContent = '';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { document.getElementById('login-err').textContent = 'Credenziali non valide'; return; }
+  startApp();
+}
+async function doLogout() { await sb.auth.signOut(); location.reload(); }
+
+async function startApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  await loadStatic();
+  await loadView();
+  subscribeRealtime();
+}
+
+async function loadStatic() {
+  const [sq, st, hd] = await Promise.all([
+    sb.from('squads').select('*').order('sort_order'),
+    sb.from('sites').select('*'),
+    sb.from('holidays').select('*')
+  ]);
+  squads = (sq.data || []).filter(s => s.active !== false);
+  sites = st.data || [];
+  holidays = hd.data || [];
+}
+
+function isHoliday(dateStr) {
+  return holidays.find(h => h.date === dateStr || (h.recurring_yearly && h.date.slice(5) === dateStr.slice(5)));
+}
+
+// ── NAVIGAZIONE GIORNI ──────────────────────
+function shiftDay(dir) { anchorDate = addDays(anchorDate, dir); loadView(dir); }
+function goToday() { anchorDate = todayMidnight(); loadView(0); }
+
+async function loadView(dir=0) {
+  const loading = document.getElementById('cal-loading');
+  loading.style.display = tasks.length ? 'none' : 'block';
+  const d1 = anchorDate, d2 = addDays(anchorDate, 1);
+  const from = fmtDate(d1), to = fmtDate(d2);
+  const { data: tk } = await sb.from('tasks').select('*').gte('date', from).lte('date', to);
+  tasks = tk || [];
+  const ids = tasks.map(t => t.id);
+  if (ids.length) { const { data: mt } = await sb.from('materials').select('*').in('task_id', ids).order('sort_order'); materials = mt || []; }
+  else materials = [];
+  renderView(dir);
+  loading.style.display = 'none';
+}
+
+function renderView(dir) {
+  const today = todayMidnight();
+  const days = [anchorDate, addDays(anchorDate, 1)];
+
+  document.getElementById('week-label').textContent = `Settimana ${isoWeekNum(anchorDate)} — ${anchorDate.getFullYear()}`;
+  document.getElementById('week-range').textContent = `${DAY_NAMES[days[0].getDay()]} ${days[0].getDate()}/${days[0].getMonth()+1} → ${DAY_NAMES[days[1].getDay()]} ${days[1].getDate()}/${days[1].getMonth()+1}`;
+
+  const headEl = document.getElementById('days-header');
+  const bodyEl = document.getElementById('cal-body');
+
+  const animate = els => {
+    if (!dir) return;
+    els.forEach(el => el.classList.add(dir > 0 ? 'slide-out-left' : 'slide-out-right'));
+  };
+
+  const headHtml = '<div class="day-head" style="border-right:none"></div>' + days.map(d => {
+    const ds = fmtDate(d); const hol = isHoliday(ds); const isToday = isSameDay(d, today);
+    return `<div class="day-head ${isToday ? 'today-col' : ''} ${hol ? 'holiday-col' : ''}">${DAY_NAMES[d.getDay()]}<span class="dt">${d.getDate()}/${d.getMonth()+1}</span>${hol ? `<span class="hol-label">🚫 ${escHtml(hol.label||'Chiuso')}</span>` : ''}</div>`;
+  }).join('');
+
+  const bodyHtml = squads.map(sq => {
+    const cells = days.map(d => {
+      const ds = fmtDate(d); const hol = isHoliday(ds); const isToday = isSameDay(d, today);
+      if (hol) return `<div class="day-cell holiday-col"><div class="holiday-flag">🚫 ${escHtml(hol.label||'Chiuso')}</div></div>`;
+      const dayTasks = tasks.filter(t => t.squad_id === sq.id && t.date === ds);
+      if (!dayTasks.length) return `<div class="day-cell ${isToday?'today-col':''}"><div class="empty-cell">—</div></div>`;
+      const cards = dayTasks.map(t => taskCardHtml(t, sq)).join('');
+      return `<div class="day-cell ${isToday?'today-col':''}">${cards}</div>`;
+    }).join('');
+    return `<div class="squad-row">
+      <div class="squad-label"><div class="squad-bar" style="background:${sq.color}"></div><span class="squad-name-text">${escHtml(sq.name)}</span></div>
+      ${cells}
+    </div>`;
+  }).join('');
+
+  if (dir) {
+    animate([headEl, ...bodyEl.querySelectorAll('.squad-row')]);
+    setTimeout(() => {
+      headEl.innerHTML = headHtml; bodyEl.innerHTML = bodyHtml;
+      [headEl, ...bodyEl.querySelectorAll('.squad-row')].forEach(el => { el.style.transform = dir > 0 ? 'translateX(30px)' : 'translateX(-30px)'; el.style.opacity = '0'; requestAnimationFrame(() => { el.style.transform=''; el.style.opacity='1'; }); });
+    }, 200);
+  } else {
+    headEl.innerHTML = headHtml; bodyEl.innerHTML = bodyHtml;
+  }
+}
+
+function taskCardHtml(t, sq) {
+  const mats = materials.filter(m => m.task_id === t.id);
+  const site = sites.find(s => s.id === t.site_id);
+  return `<div class="task-card" data-task-id="${t.id}" style="background:${sq.color}22;border-color:${sq.color}55;color:${sq.color}">
+    <div class="task-card-title">${escHtml(t.title)}</div>
+    ${t.notes ? `<div class="task-card-notes">${escHtml(t.notes)}</div>` : ''}
+    ${site ? `<div class="task-card-site">🏗 ${escHtml(site.name)}</div>` : ''}
+    ${mats.length ? `<div class="task-card-mats">${mats.map(m => `<span class="mat-tag">${escHtml(m.name)}${m.quantity?` ${m.quantity}`:''}${m.unit?` ${escHtml(m.unit)}`:''}</span>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+// ── OROLOGIO ───────────────────────────────
+function tickClock() { const d = new Date(); document.getElementById('clock').textContent = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+setInterval(tickClock, 1000); tickClock();
+
+// ── AUTO-AVANZAMENTO A MEZZANOTTE ───────────
+function scheduleNextDayRefresh() {
+  const now = new Date(); const mnt = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1);
+  setTimeout(() => { anchorDate = todayMidnight(); loadView(0); scheduleNextDayRefresh(); }, mnt - now);
+}
+scheduleNextDayRefresh();
+
+// ── RICERCA FULL-TEXT ───────────────────────
+let searchDebounce = null, searchSeq = 0;
+function highlightMatch(text, q) { if (!text) return ''; const esc = escHtml(text); const escQ = escHtml(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return esc.replace(new RegExp(escQ,'ig'), m => `<mark>${m}</mark>`); }
+function snippetAround(text, q, radius) { if (!text) return ''; const idx = text.toLowerCase().indexOf(q.toLowerCase()); if (idx===-1) return text.slice(0, radius*2); const start=Math.max(0, idx-radius), end=Math.min(text.length, idx+q.length+radius); return (start>0?'…':'') + text.slice(start,end) + (end<text.length?'…':''); }
+
+document.getElementById('search-input').addEventListener('input', e => {
+  const q = e.target.value.trim();
+  document.getElementById('search-clear').style.display = q ? 'block' : 'none';
+  clearTimeout(searchDebounce);
+  if (q.length < 2) { renderSearchState('hint'); return; }
+  searchDebounce = setTimeout(() => runSearch(q), 300);
+});
+document.getElementById('search-input').addEventListener('focus', () => document.getElementById('search-results').classList.add('show'));
+document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) document.getElementById('search-results').classList.remove('show'); });
+function clearSearch() { document.getElementById('search-input').value=''; document.getElementById('search-clear').style.display='none'; document.getElementById('search-results').classList.remove('show'); document.getElementById('search-results').innerHTML=''; }
+function renderSearchState(kind) { const box = document.getElementById('search-results'); box.classList.add('show'); box.innerHTML = kind==='hint' ? '<div class="sr-hint">Digita almeno 2 caratteri...</div>' : kind==='loading' ? '<div class="sr-hint">Ricerca in corso...</div>' : '<div class="sr-empty">Nessun risultato</div>'; }
+
+async function runSearch(q) {
+  const mySeq = ++searchSeq;
+  renderSearchState('loading');
+  const pattern = `%${q.replace(/[%_]/g, c => '\\'+c)}%`;
+  const [titleRes, notesRes, matRes] = await Promise.all([
+    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('title', pattern).limit(40),
+    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('notes', pattern).limit(40),
+    sb.from('materials').select('id,name,quantity,unit,task_id').ilike('name', pattern).limit(40)
+  ]);
+  if (mySeq !== searchSeq) return;
+  const resultMap = new Map();
+  (titleRes.data||[]).forEach(t => resultMap.set(t.id, { task:t, matchedField:'title', matchedText:t.title }));
+  (notesRes.data||[]).forEach(t => { if (!resultMap.has(t.id)) resultMap.set(t.id, { task:t, matchedField:'notes', matchedText:t.notes }); });
+  const matList = matRes.data || [];
+  const missing = [...new Set(matList.map(m=>m.task_id).filter(id=>!resultMap.has(id)))];
+  let extra = [];
+  if (missing.length) { const { data } = await sb.from('tasks').select('id,title,notes,date,squad_id').in('id', missing); extra = data || []; }
+  extra.forEach(t => resultMap.set(t.id, { task:t, matchedField:null, matchedText:null }));
+  matList.forEach(m => { const entry = resultMap.get(m.task_id); if (entry && !entry.matSnippet) entry.matSnippet = m.name + (m.quantity?' '+m.quantity:'') + (m.unit?' '+m.unit:''); });
+  if (!resultMap.size) { renderSearchState('empty'); return; }
+  renderSearchResults([...resultMap.values()], q);
+}
+function renderSearchResults(entries, q) {
+  const box = document.getElementById('search-results'); box.classList.add('show');
+  entries.sort((a,b) => (a.task.date||'').localeCompare(b.task.date||''));
+  box.innerHTML = entries.map(e => {
+    const t = e.task; const sq = squads.find(s => s.id === t.squad_id);
+    let snippetHtml = '';
+    if (e.matchedField === 'notes') snippetHtml = highlightMatch(snippetAround(e.matchedText, q, 40), q);
+    else if (e.matSnippet) snippetHtml = '🧰 ' + highlightMatch(e.matSnippet, q);
+    return `<div class="sr-item" onclick='goToSearchResult(${JSON.stringify(t.date)}, ${JSON.stringify(t.id)})'>
+      <div class="sr-item-top"><span class="sr-squad-dot" style="background:${sq?sq.color:'#888'}"></span><span class="sr-title">${highlightMatch(t.title,q)}</span></div>
+      <div class="sr-meta">${sq?escHtml(sq.name):''} · ${t.date.split('-').reverse().join('/')}</div>
+      ${snippetHtml ? `<div class="sr-snippet">${snippetHtml}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+async function goToSearchResult(dateStr, taskId) {
+  document.getElementById('search-results').classList.remove('show');
+  anchorDate = new Date(dateStr + 'T00:00:00');
+  await loadView(0);
+  setTimeout(() => {
+    const el = document.querySelector(`[data-task-id="${taskId}"]`);
+    if (el) { el.scrollIntoView({ behavior:'smooth', block:'center' }); el.classList.add('search-highlight'); setTimeout(() => el.classList.remove('search-highlight'), 2800); }
+  }, 100);
+}
+
+// ── REALTIME ─────────────────────────────────
+function subscribeRealtime() {
+  sb.channel('viewer-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => { loadView(0); showToast('🔄 Calendario aggiornato'); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => { loadView(0); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'holidays' }, () => loadStatic().then(() => loadView(0)))
+    .subscribe();
+}
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show'; setTimeout(() => t.className = 'toast', 3000); }
+
+// ── INIT ───────────────────────────────────
+sb.auth.getSession().then(({ data }) => { if (data.session) startApp(); });
+document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>

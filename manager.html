@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planner Bosi — Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:       #0c0c0a;
+  --surface:  #1a1a16;
+  --surface2: #222219;
+  --border:   #2e2e28;
+  --border2:  #3a3a32;
+  --text:     #f0ede4;
+  --muted:    #7a7870;
+  --accent:   #d4a843;
+  --accent2:  #a07830;
+  --danger:   #e05555;
+  --success:  #4caf82;
+  --font-h:   'Syne', sans-serif;
+  --font-b:   'DM Sans', sans-serif;
+  --r:        8px;
+  --r-lg:     14px;
+  --fs-op:    14px;
+  --fs-task:  13px;
+  --fs-site:  12px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-b); font-size: 14px; }
+
+/* ── LOGIN ── */
+#login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card { width: 380px; padding: 48px 40px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.login-logo { display: block; height: 48px; width: auto; margin-bottom: 24px; }
+.login-card h1 { font-family: var(--font-h); font-size: 26px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+.login-card p { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.field input { padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-family: var(--font-b); font-size: 14px; }
+.field input:focus { outline: none; border-color: var(--accent); }
+.btn-login { width: 100%; padding: 12px; background: var(--accent); color: #0c0c0a; font-family: var(--font-h); font-weight: 700; font-size: 14px; border: none; border-radius: var(--r); cursor: pointer; margin-top: 8px; }
+.btn-login:hover { background: #e8bc55; }
+.login-err { color: var(--danger); font-size: 12px; margin-top: 10px; min-height: 18px; }
+.login-forgot { display: block; text-align: center; margin-top: 14px; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; }
+.login-forgot:hover { color: var(--accent); }
+
+/* ── TOPBAR ── */
+#app { display: none; flex-direction: column; min-height: 100vh; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand img { height: 32px; width: auto; }
+.badge-mgr { background: var(--accent2); color: var(--accent); padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.topbar-mid { display: flex; align-items: center; gap: 8px; }
+.btn-icon { background: transparent; border: 1px solid var(--border2); color: #fff; font-weight: 700; border-radius: var(--r); padding: 6px 12px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.btn-logout { background: transparent; border: none; color: #fff; font-weight: 700; cursor: pointer; font-size: 13px; }
+.btn-logout:hover { color: var(--danger); }
+
+/* ── TOOLBAR ── */
+.toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 24px; background: var(--surface2); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.btn-week { background: var(--surface); border: 1px solid var(--border2); color: #fff; font-weight: 700; border-radius: var(--r); padding: 6px 12px; cursor: pointer; font-size: 13px; }
+.btn-week:hover { border-color: var(--accent); color: var(--accent); }
+.week-label { font-family: var(--font-h); font-weight: 700; font-size: 14px; color: var(--accent); margin: 0 6px; }
+.save-status { font-size: 12px; font-weight: 700; color: var(--success); opacity: 0; transition: opacity .3s; }
+.save-status.show { opacity: 1; }
+
+.search-wrap { position: relative; margin-left: auto; width: 300px; }
+.search-input { width: 100%; padding: 6px 32px 6px 12px; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--font-b); font-size: 13px; }
+.search-input:focus { outline: none; border-color: var(--accent); }
+.search-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+.search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; display: none; padding: 4px; }
+.search-results { position: absolute; top: calc(100% + 6px); right: 0; width: 420px; max-height: 420px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 200; display: none; }
+.search-results.show { display: block; }
+.sr-empty, .sr-hint { padding: 16px; color: var(--muted); font-size: 13px; text-align: center; }
+.sr-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.sr-item:hover { background: var(--surface2); }
+.sr-item-top { display: flex; align-items: center; gap: 8px; }
+.sr-squad-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sr-title { font-family: var(--font-h); font-weight: 700; font-size: 13px; color: #fff; }
+.sr-meta { font-size: 11px; color: var(--muted); }
+.sr-snippet { font-size: 12px; color: var(--muted); }
+.sr-snippet mark { background: var(--accent); color: #0c0c0a; border-radius: 2px; padding: 0 1px; }
+.task-pill.search-highlight { box-shadow: 0 0 0 2px var(--accent); }
+
+/* ── CALENDARIO ── */
+.cal-wrap { padding: 20px 24px; overflow-x: auto; flex: 1; }
+table { width: 100%; border-collapse: collapse; min-width: 960px; }
+thead th { padding: 10px 12px; font-family: var(--font-h); font-size: 12px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: .8px; border-bottom: 1px solid var(--border); text-align: left; }
+thead th:first-child { width: 160px; }
+thead th.holiday-col { color: var(--danger); }
+thead th .day-date { display: block; font-size: 11px; color: #fff; font-weight: 700; margin-top: 2px; font-family: var(--font-b); text-transform: none; letter-spacing: 0; }
+thead th .holiday-label { display: block; font-size: 10px; color: var(--danger); font-weight: 700; margin-top: 2px; }
+tbody td { vertical-align: top; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 8px; min-width: 140px; }
+tbody td:first-child { background: var(--surface); border-right: 2px solid var(--border2); }
+tbody td.holiday-col { background: rgba(224,85,85,.05); }
+.squad-name { font-weight: 700; font-size: var(--fs-op); color: #fff; display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.squad-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.cell-inner { display: flex; flex-direction: column; gap: 4px; min-height: 60px; }
+
+.task-pill { border-radius: 6px; padding: 5px 8px; font-size: var(--fs-task); line-height: 1.4; display: flex; flex-direction: column; gap: 2px; border: 1px solid transparent; }
+.task-pill:hover { border-color: rgba(255,255,255,.15); }
+.task-pill-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; }
+.task-title { flex: 1; font-weight: 500; }
+.task-site { font-size: 10px; opacity: .75; }
+.task-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.task-btn { background: rgba(0,0,0,.25); border: none; border-radius: 4px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,.6); font-size: 12px; }
+.task-btn:hover { background: rgba(0,0,0,.5); color: #fff; }
+.task-btn.del:hover { background: var(--danger); }
+.material-count { font-size: 10px; opacity: .9; color: #fff; font-weight: 600; }
+
+.add-task-btn { width: 100%; padding: 4px; background: transparent; border: 1.5px dashed var(--border2); border-radius: 6px; color: #fff; font-weight: 700; cursor: pointer; font-size: 11px; font-family: var(--font-b); margin-top: 2px; }
+.add-task-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(212,168,67,.06); }
+.holiday-flag { font-size: 11px; color: var(--danger); font-weight: 700; text-align: center; padding: 12px 0; opacity: .8; }
+
+/* ── MODAL ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200; display: flex; align-items: center; justify-content: center; }
+.modal { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--r-lg); padding: 28px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+.modal-title { font-family: var(--font-h); font-size: 17px; font-weight: 600; margin-bottom: 20px; }
+.modal-title span { color: var(--muted); font-weight: 400; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+.form-group input, .form-group textarea, .form-group select { width: 100%; padding: 9px 12px; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-family: var(--font-b); font-size: 13px; resize: vertical; }
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+.modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+.btn-cancel { background: transparent; border: 1px solid var(--border2); color: #fff; padding: 9px 16px; border-radius: var(--r); cursor: pointer; font-weight: 700; font-size: 13px; }
+.btn-cancel:hover { border-color: var(--muted); }
+.btn-save { background: var(--accent); border: none; color: #0c0c0a; padding: 9px 16px; border-radius: var(--r); cursor: pointer; font-weight: 700; font-size: 13px; }
+.btn-save:hover { background: #e8bc55; }
+.btn-danger { background: var(--danger); border: none; color: #fff; padding: 9px 16px; border-radius: var(--r); cursor: pointer; font-weight: 700; font-size: 13px; }
+
+.mat-row, .edit-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.mat-row input, .edit-row input { padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-size: 12px; }
+.mat-row .qty { width: 60px; } .mat-row .unit { width: 80px; }
+.rm-mat { background: rgba(224,85,85,.15); border: none; color: var(--danger); border-radius: 4px; width: 26px; height: 26px; cursor: pointer; font-size: 13px; flex-shrink: 0; }
+.btn-add-mat { background: transparent; border: 1.5px dashed var(--border2); color: #fff; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 12px; width: 100%; font-weight: 700; }
+.btn-add-mat:hover { border-color: var(--accent); color: var(--accent); }
+
+.edit-row input[type=text] { flex: 1; }
+.edit-row input[type=color] { width: 40px; height: 30px; padding: 2px; flex-shrink: 0; }
+.edit-row input[type=date] { flex-shrink: 0; }
+.edit-row label.chk { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
+
+.settings-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+.settings-row label { font-size: 12px; color: var(--muted); }
+.settings-row select, .settings-row input[type=color] { padding: 6px 10px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); }
+
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 700; color: #fff; z-index: 300; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.toast.show { opacity: 1; }
+.toast.error { border-color: var(--danger); color: var(--danger); }
+::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ LOGIN ═══════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <img src="logo.png" alt="Bosi Logo" class="login-logo" onerror="this.style.display='none'">
+    <h1>Planner Bosi</h1>
+    <p>Accesso Manager</p>
+    <div class="field"><label>Email</label><input type="email" id="l-email" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn-login" onclick="doLogin()">Accedi</button>
+    <div class="login-err" id="login-err"></div>
+    <span class="login-forgot" onclick="doForgotPassword()">Password dimenticata?</span>
+  </div>
+</div>
+
+<!-- ═══════════ APP ═══════════ -->
+<div id="app">
+  <div class="topbar">
+    <span class="brand"><img src="logo.png" alt="Bosi" onerror="this.style.display='none'"><span class="badge-mgr">MANAGER</span></span>
+    <div class="topbar-mid">
+      <button class="btn-icon" onclick="openSquadsModal()">👷 Operatori</button>
+      <button class="btn-icon" onclick="openSitesModal()">🏗 Cantieri</button>
+      <button class="btn-icon" onclick="openHolidaysModal()">📅 Festività</button>
+      <button class="btn-icon" onclick="openSettingsModal()">⚙ Impostazioni</button>
+    </div>
+    <div class="topbar-right">
+      <span id="user-email" style="font-size:12px;color:var(--muted)"></span>
+      <button class="btn-logout" onclick="doLogout()">Esci</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-week" onclick="shiftWeek(-1)">◀ settimana precedente</button>
+    <span class="week-label" id="week-label"></span>
+    <button class="btn-week" onclick="shiftWeek(1)">settimana successiva ▶</button>
+    <span class="save-status" id="save-status">✓ Salvato</span>
+    <div class="search-wrap">
+      <input type="text" class="search-input" id="search-input" placeholder="Cerca in tutti i testi..." autocomplete="off">
+      <span class="search-icon">🔍</span>
+      <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <div class="cal-wrap">
+    <div class="loading" id="cal-loading" style="color:#fff;font-weight:600;padding:40px;text-align:center">Caricamento...</div>
+    <table id="cal-table" style="display:none">
+      <thead><tr id="days-header"></tr></thead>
+      <tbody id="cal-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// CONFIGURAZIONE — inserisci i tuoi valori Supabase
+// ══════════════════════════════════════════
+const SUPABASE_URL      = 'INSERISCI_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'INSERISCI_SUPABASE_ANON_KEY';
+// ══════════════════════════════════════════
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const DAYS = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+let currentUser = null, currentMonday = mondayOf(new Date());
+let squads = [], sites = [], holidays = [], tasks = [], materials = [], settingsRow = {};
+
+function mondayOf(d) { const x = new Date(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); x.setHours(0,0,0,0); return x; }
+function fmtDate(d) { return d.toISOString().slice(0,10); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function escHtml(s) { return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function isoWeekNum(d) { const t = new Date(d); t.setHours(0,0,0,0); t.setDate(t.getDate() + 3 - ((t.getDay()+6)%7)); const w1 = new Date(t.getFullYear(),0,4); return 1 + Math.round(((t-w1)/86400000 - 3 + ((w1.getDay()+6)%7))/7); }
+
+// ── AUTH ───────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const pass = document.getElementById('l-pass').value;
+  document.getElementById('login-err').textContent = '';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { document.getElementById('login-err').textContent = 'Credenziali non valide'; return; }
+  const { data: prof } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+  if (!prof || prof.role !== 'manager') {
+    await sb.auth.signOut();
+    document.getElementById('login-err').textContent = 'Questo accesso è riservato ai Manager';
+    return;
+  }
+  currentUser = data.user;
+  startApp();
+}
+async function doForgotPassword() {
+  const email = document.getElementById('l-email').value.trim();
+  if (!email) { document.getElementById('login-err').textContent = 'Inserisci prima la tua email, poi clicca di nuovo'; return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname.replace('manager.html','reset-password.html') });
+  document.getElementById('login-err').style.color = error ? 'var(--danger)' : 'var(--success)';
+  document.getElementById('login-err').textContent = error ? error.message : 'Email di reset inviata, controlla la posta.';
+}
+async function doLogout() { await sb.auth.signOut(); location.reload(); }
+
+async function startApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('user-email').textContent = currentUser.email;
+  await loadStatic();
+  applySettings();
+  await loadWeek();
+  subscribeRealtime();
+}
+
+// ── CARICAMENTO DATI STATICI ────────────────
+async function loadStatic() {
+  const [sq, st, hd, se] = await Promise.all([
+    sb.from('squads').select('*').order('sort_order'),
+    sb.from('sites').select('*').order('name'),
+    sb.from('holidays').select('*'),
+    sb.from('settings').select('*').eq('id', 1).single()
+  ]);
+  squads = sq.data || []; sites = st.data || []; holidays = hd.data || []; settingsRow = se.data || {};
+}
+function applySettings() {
+  document.body.style.background = settingsRow.background_color || '#0c0c0a';
+  const map = { small: '12px', medium: '14px', large: '17px' };
+  document.documentElement.style.setProperty('--fs-op', map[settingsRow.font_size_operators] || '14px');
+  document.documentElement.style.setProperty('--fs-task', map[settingsRow.font_size_tasks] || '13px');
+  document.documentElement.style.setProperty('--fs-site', map[settingsRow.font_size_sites] || '12px');
+}
+
+// ── SETTIMANA ────────────────────────────────
+function shiftWeek(dir) { currentMonday = addDays(currentMonday, dir * 7); loadWeek(); }
+
+async function loadWeek() {
+  document.getElementById('cal-loading').style.display = 'block';
+  document.getElementById('cal-table').style.display = 'none';
+  const from = fmtDate(currentMonday), to = fmtDate(addDays(currentMonday, 5));
+  const { data: tk } = await sb.from('tasks').select('*').gte('date', from).lte('date', to);
+  tasks = tk || [];
+  const ids = tasks.map(t => t.id);
+  if (ids.length) {
+    const { data: mt } = await sb.from('materials').select('*').in('task_id', ids).order('sort_order');
+    materials = mt || [];
+  } else materials = [];
+  renderCalendar();
+  document.getElementById('cal-loading').style.display = 'none';
+  document.getElementById('cal-table').style.display = 'table';
+}
+
+function isHoliday(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return holidays.find(h => h.date === dateStr || (h.recurring_yearly && h.date.slice(5) === dateStr.slice(5)));
+}
+
+function renderCalendar() {
+  const monday = currentMonday;
+  document.getElementById('week-label').textContent =
+    `Settimana ${isoWeekNum(monday)} — ${monday.getFullYear()} (${fmtDate(monday).split('-').reverse().join('/')} → ${fmtDate(addDays(monday,5)).split('-').reverse().join('/')})`;
+
+  const headRow = document.getElementById('days-header');
+  headRow.innerHTML = '<th>Squadra</th>' + DAYS.map((d, i) => {
+    const dt = addDays(monday, i); const ds = fmtDate(dt); const hol = isHoliday(ds);
+    return `<th class="${hol ? 'holiday-col' : ''}">${d}<span class="day-date">${dt.getDate()}/${dt.getMonth()+1}</span>${hol ? `<span class="holiday-label">${escHtml(hol.label||'Chiusura')}</span>` : ''}</th>`;
+  }).join('');
+
+  const body = document.getElementById('cal-body');
+  body.innerHTML = squads.filter(s => s.active !== false).map(sq => {
+    const cells = DAYS.map((_, i) => {
+      const dt = addDays(monday, i); const ds = fmtDate(dt); const hol = isHoliday(ds);
+      if (hol) return `<td class="holiday-col"><div class="holiday-flag">🚫 ${escHtml(hol.label||'Chiuso')}</div></td>`;
+      const dayTasks = tasks.filter(t => t.squad_id === sq.id && t.date === ds);
+      const pills = dayTasks.map(t => taskPillHtml(t)).join('');
+      return `<td><div class="cell-inner">${pills}<button class="add-task-btn" onclick="openTaskModal('${sq.id}','${ds}')">+ aggiungi task</button></div></td>`;
+    }).join('');
+    return `<tr><td><div class="squad-name"><span class="squad-dot" style="background:${sq.color}"></span>${escHtml(sq.name)}</div></td>${cells}</tr>`;
+  }).join('');
+}
+
+function taskPillHtml(t) {
+  const mats = materials.filter(m => m.task_id === t.id);
+  const site = sites.find(s => s.id === t.site_id);
+  const sq = squads.find(s => s.id === t.squad_id);
+  return `<div class="task-pill" data-task-id="${t.id}" style="background:${sq.color}22;color:${sq.color}">
+    <div class="task-pill-top">
+      <span class="task-title">${escHtml(t.title)}</span>
+      <span class="task-actions">
+        <button class="task-btn" title="Materiali" onclick="openMaterialsModal('${t.id}')">📦</button>
+        <button class="task-btn" title="Modifica" onclick="openTaskModal('${t.squad_id}','${t.date}','${t.id}')">✎</button>
+        <button class="task-btn del" title="Elimina" onclick="deleteTask('${t.id}')">✕</button>
+      </span>
+    </div>
+    ${site ? `<span class="task-site">🏗 ${escHtml(site.name)}</span>` : ''}
+    ${mats.length ? `<span class="material-count">📦 ${mats.length} material${mats.length>1?'i':'e'}</span>` : ''}
+  </div>`;
+}
+
+// ── TASK CRUD ────────────────────────────────
+function openTaskModal(squadId, dateStr, taskId=null) {
+  const t = taskId ? tasks.find(x => x.id === taskId) : null;
+  const sq = squads.find(s => s.id === squadId);
+  const siteOptions = sites.filter(s => s.active !== false).map(s => `<option value="${s.id}" ${t && t.site_id===s.id ? 'selected':''}>${escHtml(s.name)}</option>`).join('');
+  showModal(`
+    <div class="modal-title">${t ? 'Modifica' : 'Nuovo'} task <span>— ${escHtml(sq.name)} · ${dateStr.split('-').reverse().join('/')}</span></div>
+    <div class="form-group"><label>Titolo</label><input type="text" id="tk-title" value="${t ? escHtml(t.title) : ''}" autofocus></div>
+    <div class="form-group"><label>Cantiere/Cliente (opzionale)</label><select id="tk-site"><option value="">— Nessuno —</option>${siteOptions}</select></div>
+    <div class="form-group"><label>Note</label><textarea id="tk-notes" rows="3">${t ? escHtml(t.notes||'') : ''}</textarea></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Annulla</button>
+      <button class="btn-save" onclick="saveTask('${squadId}','${dateStr}','${taskId||''}')">Salva</button>
+    </div>
+  `);
+}
+async function saveTask(squadId, dateStr, taskId) {
+  const title = document.getElementById('tk-title').value.trim();
+  if (!title) { showToast('Il titolo è obbligatorio', 'error'); return; }
+  const siteId = document.getElementById('tk-site').value || null;
+  const notes = document.getElementById('tk-notes').value.trim();
+  if (taskId) {
+    const { error } = await sb.from('tasks').update({ title, notes, site_id: siteId, updated_at: new Date().toISOString() }).eq('id', taskId);
+    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  } else {
+    const { error } = await sb.from('tasks').insert({ squad_id: squadId, date: dateStr, title, notes, site_id: siteId, created_by: currentUser.id });
+    if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  }
+  closeModal(); await loadWeek(); showSaved();
+}
+async function deleteTask(taskId) {
+  if (!confirm('Eliminare questo task e i suoi materiali?')) return;
+  const { error } = await sb.from('tasks').delete().eq('id', taskId);
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  await loadWeek(); showSaved();
+}
+
+// ── MATERIALI ────────────────────────────────
+function openMaterialsModal(taskId) {
+  const t = tasks.find(x => x.id === taskId);
+  const mats = materials.filter(m => m.task_id === taskId);
+  const rows = mats.map((m,i) => matRow(i, m.name, m.quantity, m.unit, m.id)).join('');
+  showModal(`
+    <div class="modal-title">📦 Materiali <span>— ${escHtml(t?.title||'')}</span></div>
+    <div id="mat-list">${rows}</div>
+    <button class="btn-add-mat" onclick="addMatRow()">+ aggiungi materiale</button>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Chiudi</button>
+      <button class="btn-save" onclick="saveMaterials('${taskId}')">Salva materiali</button>
+    </div>
+  `);
+}
+function matRow(idx, name='', qty='', unit='', id='') {
+  return `<div class="mat-row" id="mrow-${idx}" data-id="${id}">
+    <input type="text" class="mat-name" placeholder="Materiale" value="${escHtml(name)}" style="flex:1">
+    <input type="number" class="mat-qty qty" placeholder="Qtà" value="${qty||''}">
+    <input type="text" class="mat-unit unit" placeholder="Unità" value="${escHtml(unit)}" list="units-list">
+    <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+}
+let _matIdx = 100;
+function addMatRow() { const list = document.getElementById('mat-list'); const div = document.createElement('div'); div.innerHTML = matRow(_matIdx++); list.appendChild(div.firstElementChild); }
+async function saveMaterials(taskId) {
+  const rows = document.querySelectorAll('#mat-list .mat-row');
+  const toInsert = [], toUpdate = [], toKeepIds = [];
+  rows.forEach(r => {
+    const name = r.querySelector('.mat-name').value.trim();
+    if (!name) return;
+    const obj = { task_id: taskId, name, quantity: r.querySelector('.mat-qty').value || null, unit: r.querySelector('.mat-unit').value.trim() || null };
+    const existId = r.dataset.id;
+    if (existId) { obj.id = existId; toKeepIds.push(existId); toUpdate.push(obj); } else toInsert.push(obj);
+  });
+  const oldIds = materials.filter(m => m.task_id === taskId).map(m => m.id);
+  const toDelete = oldIds.filter(id => !toKeepIds.includes(id));
+  if (toDelete.length) await sb.from('materials').delete().in('id', toDelete);
+  if (toInsert.length) { const { error } = await sb.from('materials').insert(toInsert); if (error) { showToast('Errore: ' + error.message,'error'); return; } }
+  for (const m of toUpdate) { const { error } = await sb.from('materials').update({ name: m.name, quantity: m.quantity, unit: m.unit }).eq('id', m.id); if (error) { showToast('Errore: ' + error.message,'error'); return; } }
+  closeModal(); await loadWeek(); showSaved();
+}
+
+// ── OPERATORI (SQUADRE) ─────────────────────
+function openSquadsModal() {
+  const rows = squads.map(sq => `
+    <div class="edit-row" data-id="${sq.id}">
+      <input type="color" value="${sq.color}" class="e-color">
+      <input type="text" value="${escHtml(sq.name)}" class="e-name" placeholder="Nome operatore" style="flex:1">
+      <label class="chk"><input type="checkbox" class="e-active" ${sq.active !== false ? 'checked' : ''}> attivo</label>
+      <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
+    </div>`).join('');
+  showModal(`
+    <div class="modal-title">👷 Gestione operatori</div>
+    <div id="edit-list">${rows}</div>
+    <button class="btn-add-mat" onclick="addSquadRow()" style="margin-top:8px">+ aggiungi operatore</button>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">Annulla</button><button class="btn-save" onclick="saveSquads()">Salva</button></div>
+  `);
+}
+function addSquadRow() {
+  const colors = ['#6366f1','#ec4899','#14b8a6','#f97316','#a855f7','#3b82f6','#22c55e','#eab308','#ef4444','#06b6d4'];
+  const color = colors[Math.floor(Math.random()*colors.length)];
+  const div = document.createElement('div');
+  div.innerHTML = `<div class="edit-row" data-id="">
+    <input type="color" value="${color}" class="e-color">
+    <input type="text" value="" class="e-name" placeholder="Nome operatore" style="flex:1">
+    <label class="chk"><input type="checkbox" class="e-active" checked> attivo</label>
+    <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+  document.getElementById('edit-list').appendChild(div.firstElementChild);
+}
+async function saveSquads() {
+  const rows = document.querySelectorAll('#edit-list .edit-row');
+  const toInsert = [], toUpdate = [];
+  rows.forEach((r,i) => {
+    const name = r.querySelector('.e-name').value.trim();
+    if (!name) return;
+    const id = r.dataset.id;
+    const obj = { name, color: r.querySelector('.e-color').value, active: r.querySelector('.e-active').checked, sort_order: i };
+    if (id) { obj.id = id; toUpdate.push(obj); } else toInsert.push(obj);
+  });
+  if (toInsert.length) { const { error } = await sb.from('squads').insert(toInsert); if (error) { showToast('Errore: '+error.message,'error'); return; } }
+  for (const s of toUpdate) { const { error } = await sb.from('squads').update({ name:s.name, color:s.color, active:s.active, sort_order:s.sort_order }).eq('id', s.id); if (error) { showToast('Errore: '+error.message,'error'); return; } }
+  const keepIds = toUpdate.map(s=>s.id); const oldIds = squads.map(s=>s.id);
+  const toDel = oldIds.filter(id => !keepIds.includes(id));
+  if (toDel.length) await sb.from('squads').delete().in('id', toDel);
+  await loadStatic(); closeModal(); renderCalendar(); showSaved();
+}
+
+// ── CANTIERI ─────────────────────────────────
+function openSitesModal() {
+  const rows = sites.map(s => `
+    <div class="edit-row" data-id="${s.id}">
+      <input type="text" value="${escHtml(s.name)}" class="e-name" placeholder="Nome cantiere/cliente" style="flex:1">
+      <input type="text" value="${escHtml(s.notes||'')}" class="e-notes" placeholder="Note" style="flex:1">
+      <label class="chk"><input type="checkbox" class="e-active" ${s.active !== false ? 'checked' : ''}> attivo</label>
+      <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
+    </div>`).join('');
+  showModal(`
+    <div class="modal-title">🏗 Gestione cantieri/clienti</div>
+    <div id="edit-list">${rows}</div>
+    <button class="btn-add-mat" onclick="addSiteRow()" style="margin-top:8px">+ aggiungi cantiere</button>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">Annulla</button><button class="btn-save" onclick="saveSites()">Salva</button></div>
+  `);
+}
+function addSiteRow() {
+  const div = document.createElement('div');
+  div.innerHTML = `<div class="edit-row" data-id="">
+    <input type="text" value="" class="e-name" placeholder="Nome cantiere/cliente" style="flex:1">
+    <input type="text" value="" class="e-notes" placeholder="Note" style="flex:1">
+    <label class="chk"><input type="checkbox" class="e-active" checked> attivo</label>
+    <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+  document.getElementById('edit-list').appendChild(div.firstElementChild);
+}
+async function saveSites() {
+  const rows = document.querySelectorAll('#edit-list .edit-row');
+  const toInsert = [], toUpdate = [];
+  rows.forEach(r => {
+    const name = r.querySelector('.e-name').value.trim();
+    if (!name) return;
+    const id = r.dataset.id;
+    const obj = { name, notes: r.querySelector('.e-notes').value.trim() || null, active: r.querySelector('.e-active').checked };
+    if (id) { obj.id = id; toUpdate.push(obj); } else toInsert.push(obj);
+  });
+  if (toInsert.length) { const { error } = await sb.from('sites').insert(toInsert); if (error) { showToast('Errore: '+error.message,'error'); return; } }
+  for (const s of toUpdate) { const { error } = await sb.from('sites').update({ name:s.name, notes:s.notes, active:s.active }).eq('id', s.id); if (error) { showToast('Errore: '+error.message,'error'); return; } }
+  const keepIds = toUpdate.map(s=>s.id); const oldIds = sites.map(s=>s.id);
+  const toDel = oldIds.filter(id => !keepIds.includes(id));
+  if (toDel.length) await sb.from('sites').delete().in('id', toDel);
+  await loadStatic(); closeModal(); renderCalendar(); showSaved();
+}
+
+// ── FESTIVITÀ ────────────────────────────────
+function openHolidaysModal() {
+  const rows = holidays.map(h => `
+    <div class="edit-row" data-id="${h.id}">
+      <input type="date" value="${h.date}" class="e-date">
+      <input type="text" value="${escHtml(h.label||'')}" class="e-label" placeholder="Descrizione" style="flex:1">
+      <label class="chk"><input type="checkbox" class="e-recurring" ${h.recurring_yearly ? 'checked' : ''}> ogni anno</label>
+      <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
+    </div>`).join('');
+  showModal(`
+    <div class="modal-title">📅 Giorni festivi / chiusura</div>
+    <div id="edit-list">${rows}</div>
+    <button class="btn-add-mat" onclick="addHolidayRow()" style="margin-top:8px">+ aggiungi data</button>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">Annulla</button><button class="btn-save" onclick="saveHolidays()">Salva</button></div>
+  `);
+}
+function addHolidayRow() {
+  const div = document.createElement('div');
+  div.innerHTML = `<div class="edit-row" data-id="">
+    <input type="date" value="" class="e-date">
+    <input type="text" value="" class="e-label" placeholder="Descrizione" style="flex:1">
+    <label class="chk"><input type="checkbox" class="e-recurring"> ogni anno</label>
+    <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+  document.getElementById('edit-list').appendChild(div.firstElementChild);
+}
+async function saveHolidays() {
+  const rows = document.querySelectorAll('#edit-list .edit-row');
+  const toInsert = [], toUpdate = [];
+  rows.forEach(r => {
+    const date = r.querySelector('.e-date').value;
+    if (!date) return;
+    const id = r.dataset.id;
+    const obj = { date, label: r.querySelector('.e-label').value.trim() || null, recurring_yearly: r.querySelector('.e-recurring').checked };
+    if (id) { obj.id = id; toUpdate.push(obj); } else toInsert.push(obj);
+  });
+  if (toInsert.length) { const { error } = await sb.from('holidays').insert(toInsert); if (error) { showToast('Errore: '+error.message,'error'); return; } }
+  for (const h of toUpdate) { const { error } = await sb.from('holidays').update({ date:h.date, label:h.label, recurring_yearly:h.recurring_yearly }).eq('id', h.id); if (error) { showToast('Errore: '+error.message,'error'); return; } }
+  const keepIds = toUpdate.map(h=>h.id); const oldIds = holidays.map(h=>h.id);
+  const toDel = oldIds.filter(id => !keepIds.includes(id));
+  if (toDel.length) await sb.from('holidays').delete().in('id', toDel);
+  await loadStatic(); closeModal(); renderCalendar(); showSaved();
+}
+
+// ── IMPOSTAZIONI ─────────────────────────────
+function openSettingsModal() {
+  showModal(`
+    <div class="modal-title">⚙ Impostazioni</div>
+    <div class="settings-row"><label>Colore sfondo app</label><input type="color" id="set-bg" value="${settingsRow.background_color || '#0c0c0a'}"></div>
+    <div class="settings-row"><label>Dimensione testo — Operatori</label>
+      <select id="set-fs-op"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
+    <div class="settings-row"><label>Dimensione testo — Task</label>
+      <select id="set-fs-task"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
+    <div class="settings-row"><label>Dimensione testo — Cantieri</label>
+      <select id="set-fs-site"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">Annulla</button><button class="btn-save" onclick="saveSettings()">Salva</button></div>
+  `);
+  document.getElementById('set-fs-op').value = settingsRow.font_size_operators || 'medium';
+  document.getElementById('set-fs-task').value = settingsRow.font_size_tasks || 'medium';
+  document.getElementById('set-fs-site').value = settingsRow.font_size_sites || 'medium';
+}
+async function saveSettings() {
+  const obj = {
+    background_color: document.getElementById('set-bg').value,
+    font_size_operators: document.getElementById('set-fs-op').value,
+    font_size_tasks: document.getElementById('set-fs-task').value,
+    font_size_sites: document.getElementById('set-fs-site').value
+  };
+  const { error } = await sb.from('settings').update(obj).eq('id', 1);
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  settingsRow = { ...settingsRow, ...obj };
+  applySettings(); closeModal(); showSaved();
+}
+
+// ── RICERCA FULL-TEXT ────────────────────────
+let searchDebounce = null, searchSeq = 0;
+function highlightMatch(text, q) { if (!text) return ''; const esc = escHtml(text); const escQ = escHtml(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return esc.replace(new RegExp(escQ,'ig'), m => `<mark>${m}</mark>`); }
+function snippetAround(text, q, radius) { if (!text) return ''; const idx = text.toLowerCase().indexOf(q.toLowerCase()); if (idx===-1) return text.slice(0, radius*2); const start=Math.max(0, idx-radius), end=Math.min(text.length, idx+q.length+radius); return (start>0?'…':'') + text.slice(start,end) + (end<text.length?'…':''); }
+
+document.getElementById('search-input').addEventListener('input', e => {
+  const q = e.target.value.trim();
+  document.getElementById('search-clear').style.display = q ? 'block' : 'none';
+  clearTimeout(searchDebounce);
+  if (q.length < 2) { renderSearchState('hint'); return; }
+  searchDebounce = setTimeout(() => runSearch(q), 300);
+});
+document.getElementById('search-input').addEventListener('focus', () => document.getElementById('search-results').classList.add('show'));
+document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) document.getElementById('search-results').classList.remove('show'); });
+function clearSearch() { document.getElementById('search-input').value=''; document.getElementById('search-clear').style.display='none'; document.getElementById('search-results').classList.remove('show'); document.getElementById('search-results').innerHTML=''; }
+function renderSearchState(kind) { const box = document.getElementById('search-results'); box.classList.add('show'); box.innerHTML = kind==='hint' ? '<div class="sr-hint">Digita almeno 2 caratteri...</div>' : kind==='loading' ? '<div class="sr-hint">Ricerca in corso...</div>' : '<div class="sr-empty">Nessun risultato</div>'; }
+
+async function runSearch(q) {
+  const mySeq = ++searchSeq;
+  renderSearchState('loading');
+  const pattern = `%${q.replace(/[%_]/g, c => '\\'+c)}%`;
+  const [titleRes, notesRes, matRes] = await Promise.all([
+    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('title', pattern).limit(40),
+    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('notes', pattern).limit(40),
+    sb.from('materials').select('id,name,quantity,unit,task_id').ilike('name', pattern).limit(40)
+  ]);
+  if (mySeq !== searchSeq) return;
+  const resultMap = new Map();
+  (titleRes.data||[]).forEach(t => resultMap.set(t.id, { task:t, matchedField:'title', matchedText:t.title }));
+  (notesRes.data||[]).forEach(t => { if (!resultMap.has(t.id)) resultMap.set(t.id, { task:t, matchedField:'notes', matchedText:t.notes }); });
+  const matList = matRes.data || [];
+  const missing = [...new Set(matList.map(m=>m.task_id).filter(id=>!resultMap.has(id)))];
+  let extra = [];
+  if (missing.length) { const { data } = await sb.from('tasks').select('id,title,notes,date,squad_id').in('id', missing); extra = data || []; }
+  extra.forEach(t => resultMap.set(t.id, { task:t, matchedField:null, matchedText:null }));
+  matList.forEach(m => { const entry = resultMap.get(m.task_id); if (entry && !entry.matSnippet) entry.matSnippet = m.name + (m.quantity?' '+m.quantity:'') + (m.unit?' '+m.unit:''); });
+  if (!resultMap.size) { renderSearchState('empty'); return; }
+  renderSearchResults([...resultMap.values()], q);
+}
+function renderSearchResults(entries, q) {
+  const box = document.getElementById('search-results'); box.classList.add('show');
+  entries.sort((a,b) => (a.task.date||'').localeCompare(b.task.date||''));
+  box.innerHTML = entries.map(e => {
+    const t = e.task; const sq = squads.find(s => s.id === t.squad_id);
+    let snippetHtml = '';
+    if (e.matchedField === 'notes') snippetHtml = highlightMatch(snippetAround(e.matchedText, q, 40), q);
+    else if (e.matSnippet) snippetHtml = '🧰 ' + highlightMatch(e.matSnippet, q);
+    return `<div class="sr-item" onclick='goToSearchResult(${JSON.stringify(t.date)}, ${JSON.stringify(t.id)})'>
+      <div class="sr-item-top"><span class="sr-squad-dot" style="background:${sq?sq.color:'#888'}"></span><span class="sr-title">${highlightMatch(t.title,q)}</span></div>
+      <div class="sr-meta">${sq?escHtml(sq.name):''} · ${t.date.split('-').reverse().join('/')}</div>
+      ${snippetHtml ? `<div class="sr-snippet">${snippetHtml}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+async function goToSearchResult(dateStr, taskId) {
+  document.getElementById('search-results').classList.remove('show');
+  currentMonday = mondayOf(new Date(dateStr + 'T00:00:00'));
+  await loadWeek();
+  setTimeout(() => {
+    const el = document.querySelector(`[data-task-id="${taskId}"]`);
+    if (el) { el.scrollIntoView({ behavior:'smooth', block:'center' }); el.classList.add('search-highlight'); setTimeout(() => el.classList.remove('search-highlight'), 2800); }
+  }, 100);
+}
+
+// ── REALTIME ─────────────────────────────────
+function subscribeRealtime() {
+  sb.channel('manager-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadWeek())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => loadWeek())
+    .subscribe();
+}
+
+// ── MODAL / TOAST HELPERS ───────────────────
+function showModal(html) {
+  closeModal();
+  const ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'modal-ov';
+  ov.innerHTML = `<div class="modal">${html}</div>
+    <datalist id="units-list"><option value="pz"><option value="m"><option value="m²"><option value="kg"><option value="lt"><option value="ml"><option value="rotoli"><option value="sacchi"></datalist>`;
+  ov.addEventListener('click', e => { if (e.target === ov) closeModal(); });
+  document.body.appendChild(ov);
+  setTimeout(() => { const el = ov.querySelector('[autofocus]'); if (el) el.focus(); }, 50);
+}
+function closeModal() { document.getElementById('modal-ov')?.remove(); }
+function showSaved() { const el = document.getElementById('save-status'); el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); }
+function showToast(msg, type='success') { const t = document.getElementById('toast'); t.textContent = msg; t.className = `toast ${type} show`; setTimeout(() => t.className = 'toast', 3000); }
+
+// ── INIT ───────────────────────────────────
+sb.auth.getSession().then(async ({ data }) => {
+  if (data.session) {
+    const { data: prof } = await sb.from('profiles').select('*').eq('id', data.session.user.id).single();
+    if (prof && prof.role === 'manager') { currentUser = data.session.user; startApp(); }
+  }
+});
+document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>
