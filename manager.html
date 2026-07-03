@@ -26,7 +26,6 @@
   --r-lg:     14px;
   --fs-op:    14px;
   --fs-task:  13px;
-  --fs-site:  12px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-b); font-size: 14px; }
@@ -105,12 +104,10 @@ tbody td.holiday-col { background: rgba(224,85,85,.05); }
 .task-pill:hover { border-color: rgba(255,255,255,.15); }
 .task-pill-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; }
 .task-title { flex: 1; font-weight: 500; }
-.task-site { font-size: 10px; opacity: .75; }
 .task-actions { display: flex; gap: 2px; flex-shrink: 0; }
 .task-btn { background: rgba(0,0,0,.25); border: none; border-radius: 4px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,.6); font-size: 12px; }
 .task-btn:hover { background: rgba(0,0,0,.5); color: #fff; }
 .task-btn.del:hover { background: var(--danger); }
-.material-count { font-size: 10px; opacity: .9; color: #fff; font-weight: 600; }
 
 .add-task-btn { width: 100%; padding: 4px; background: transparent; border: 1.5px dashed var(--border2); border-radius: 6px; color: #fff; font-weight: 700; cursor: pointer; font-size: 11px; font-family: var(--font-b); margin-top: 2px; }
 .add-task-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(212,168,67,.06); }
@@ -176,7 +173,6 @@ tbody td.holiday-col { background: rgba(224,85,85,.05); }
     <span class="brand"><img src="logo.png" alt="Bosi" onerror="this.style.display='none'"><span class="badge-mgr">MANAGER</span></span>
     <div class="topbar-mid">
       <button class="btn-icon" onclick="openSquadsModal()">👷 Operatori</button>
-      <button class="btn-icon" onclick="openSitesModal()">🏗 Cantieri</button>
       <button class="btn-icon" onclick="openHolidaysModal()">📅 Festività</button>
       <button class="btn-icon" onclick="openSettingsModal()">⚙ Impostazioni</button>
     </div>
@@ -214,8 +210,8 @@ tbody td.holiday-col { background: rgba(224,85,85,.05); }
 // ══════════════════════════════════════════
 // CONFIGURAZIONE — inserisci i tuoi valori Supabase
 // ══════════════════════════════════════════
-const SUPABASE_URL      = 'https://wdepuzaorntgbbvghgun.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_VvLFT1S5qMolUs4007bcNA_rzIHVxFU';
+const SUPABASE_URL      = 'INSERISCI_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'INSERISCI_SUPABASE_ANON_KEY';
 // ══════════════════════════════════════════
 
 const { createClient } = supabase;
@@ -223,7 +219,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const DAYS = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
 let currentUser = null, currentMonday = mondayOf(new Date());
-let squads = [], sites = [], holidays = [], tasks = [], materials = [], settingsRow = {};
+let squads = [], holidays = [], tasks = [], settingsRow = {};
 
 function mondayOf(d) { const x = new Date(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); x.setHours(0,0,0,0); return x; }
 function fmtDate(d) { return d.toISOString().slice(0,10); }
@@ -268,20 +264,18 @@ async function startApp() {
 
 // ── CARICAMENTO DATI STATICI ────────────────
 async function loadStatic() {
-  const [sq, st, hd, se] = await Promise.all([
+  const [sq, hd, se] = await Promise.all([
     sb.from('squads').select('*').order('sort_order'),
-    sb.from('sites').select('*').order('name'),
     sb.from('holidays').select('*'),
     sb.from('settings').select('*').eq('id', 1).single()
   ]);
-  squads = sq.data || []; sites = st.data || []; holidays = hd.data || []; settingsRow = se.data || {};
+  squads = sq.data || []; holidays = hd.data || []; settingsRow = se.data || {};
 }
 function applySettings() {
   document.body.style.background = settingsRow.background_color || '#0c0c0a';
   const map = { small: '12px', medium: '14px', large: '17px' };
   document.documentElement.style.setProperty('--fs-op', map[settingsRow.font_size_operators] || '14px');
   document.documentElement.style.setProperty('--fs-task', map[settingsRow.font_size_tasks] || '13px');
-  document.documentElement.style.setProperty('--fs-site', map[settingsRow.font_size_sites] || '12px');
 }
 
 // ── SETTIMANA ────────────────────────────────
@@ -293,11 +287,6 @@ async function loadWeek() {
   const from = fmtDate(currentMonday), to = fmtDate(addDays(currentMonday, 5));
   const { data: tk } = await sb.from('tasks').select('*').gte('date', from).lte('date', to);
   tasks = tk || [];
-  const ids = tasks.map(t => t.id);
-  if (ids.length) {
-    const { data: mt } = await sb.from('materials').select('*').in('task_id', ids).order('sort_order');
-    materials = mt || [];
-  } else materials = [];
   renderCalendar();
   document.getElementById('cal-loading').style.display = 'none';
   document.getElementById('cal-table').style.display = 'table';
@@ -333,20 +322,15 @@ function renderCalendar() {
 }
 
 function taskPillHtml(t) {
-  const mats = materials.filter(m => m.task_id === t.id);
-  const site = sites.find(s => s.id === t.site_id);
   const sq = squads.find(s => s.id === t.squad_id);
   return `<div class="task-pill" data-task-id="${t.id}" style="background:${sq.color}22;color:${sq.color}">
     <div class="task-pill-top">
       <span class="task-title">${escHtml(t.title)}</span>
       <span class="task-actions">
-        <button class="task-btn" title="Materiali" onclick="openMaterialsModal('${t.id}')">📦</button>
         <button class="task-btn" title="Modifica" onclick="openTaskModal('${t.squad_id}','${t.date}','${t.id}')">✎</button>
         <button class="task-btn del" title="Elimina" onclick="deleteTask('${t.id}')">✕</button>
       </span>
     </div>
-    ${site ? `<span class="task-site">🏗 ${escHtml(site.name)}</span>` : ''}
-    ${mats.length ? `<span class="material-count">📦 ${mats.length} material${mats.length>1?'i':'e'}</span>` : ''}
   </div>`;
 }
 
@@ -354,12 +338,10 @@ function taskPillHtml(t) {
 function openTaskModal(squadId, dateStr, taskId=null) {
   const t = taskId ? tasks.find(x => x.id === taskId) : null;
   const sq = squads.find(s => s.id === squadId);
-  const siteOptions = sites.filter(s => s.active !== false).map(s => `<option value="${s.id}" ${t && t.site_id===s.id ? 'selected':''}>${escHtml(s.name)}</option>`).join('');
   showModal(`
     <div class="modal-title">${t ? 'Modifica' : 'Nuovo'} task <span>— ${escHtml(sq.name)} · ${dateStr.split('-').reverse().join('/')}</span></div>
-    <div class="form-group"><label>Titolo</label><input type="text" id="tk-title" value="${t ? escHtml(t.title) : ''}" autofocus></div>
-    <div class="form-group"><label>Cantiere/Cliente (opzionale)</label><select id="tk-site"><option value="">— Nessuno —</option>${siteOptions}</select></div>
-    <div class="form-group"><label>Note</label><textarea id="tk-notes" rows="3">${t ? escHtml(t.notes||'') : ''}</textarea></div>
+    <div class="form-group"><label>Cantiere / Cliente</label><input type="text" id="tk-title" value="${t ? escHtml(t.title) : ''}" placeholder="es. Installazione presso Pippo Pluto" autofocus></div>
+    <div class="form-group"><label>Note</label><textarea id="tk-notes" rows="3" placeholder="es. Puntuali alle 8.30 dal cliente, chiedere di Topolino">${t ? escHtml(t.notes||'') : ''}</textarea></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Annulla</button>
       <button class="btn-save" onclick="saveTask('${squadId}','${dateStr}','${taskId||''}')">Salva</button>
@@ -368,66 +350,22 @@ function openTaskModal(squadId, dateStr, taskId=null) {
 }
 async function saveTask(squadId, dateStr, taskId) {
   const title = document.getElementById('tk-title').value.trim();
-  if (!title) { showToast('Il titolo è obbligatorio', 'error'); return; }
-  const siteId = document.getElementById('tk-site').value || null;
+  if (!title) { showToast('Il nome cantiere/cliente è obbligatorio', 'error'); return; }
   const notes = document.getElementById('tk-notes').value.trim();
   if (taskId) {
-    const { error } = await sb.from('tasks').update({ title, notes, site_id: siteId, updated_at: new Date().toISOString() }).eq('id', taskId);
+    const { error } = await sb.from('tasks').update({ title, notes, updated_at: new Date().toISOString() }).eq('id', taskId);
     if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   } else {
-    const { error } = await sb.from('tasks').insert({ squad_id: squadId, date: dateStr, title, notes, site_id: siteId, created_by: currentUser.id });
+    const { error } = await sb.from('tasks').insert({ squad_id: squadId, date: dateStr, title, notes, created_by: currentUser.id });
     if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   }
   closeModal(); await loadWeek(); showSaved();
 }
 async function deleteTask(taskId) {
-  if (!confirm('Eliminare questo task e i suoi materiali?')) return;
+  if (!confirm('Eliminare questo task?')) return;
   const { error } = await sb.from('tasks').delete().eq('id', taskId);
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   await loadWeek(); showSaved();
-}
-
-// ── MATERIALI ────────────────────────────────
-function openMaterialsModal(taskId) {
-  const t = tasks.find(x => x.id === taskId);
-  const mats = materials.filter(m => m.task_id === taskId);
-  const rows = mats.map((m,i) => matRow(i, m.name, m.quantity, m.unit, m.id)).join('');
-  showModal(`
-    <div class="modal-title">📦 Materiali <span>— ${escHtml(t?.title||'')}</span></div>
-    <div id="mat-list">${rows}</div>
-    <button class="btn-add-mat" onclick="addMatRow()">+ aggiungi materiale</button>
-    <div class="modal-btns">
-      <button class="btn-cancel" onclick="closeModal()">Chiudi</button>
-      <button class="btn-save" onclick="saveMaterials('${taskId}')">Salva materiali</button>
-    </div>
-  `);
-}
-function matRow(idx, name='', qty='', unit='', id='') {
-  return `<div class="mat-row" id="mrow-${idx}" data-id="${id}">
-    <input type="text" class="mat-name" placeholder="Materiale" value="${escHtml(name)}" style="flex:1">
-    <input type="number" class="mat-qty qty" placeholder="Qtà" value="${qty||''}">
-    <input type="text" class="mat-unit unit" placeholder="Unità" value="${escHtml(unit)}" list="units-list">
-    <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
-  </div>`;
-}
-let _matIdx = 100;
-function addMatRow() { const list = document.getElementById('mat-list'); const div = document.createElement('div'); div.innerHTML = matRow(_matIdx++); list.appendChild(div.firstElementChild); }
-async function saveMaterials(taskId) {
-  const rows = document.querySelectorAll('#mat-list .mat-row');
-  const toInsert = [], toUpdate = [], toKeepIds = [];
-  rows.forEach(r => {
-    const name = r.querySelector('.mat-name').value.trim();
-    if (!name) return;
-    const obj = { task_id: taskId, name, quantity: r.querySelector('.mat-qty').value || null, unit: r.querySelector('.mat-unit').value.trim() || null };
-    const existId = r.dataset.id;
-    if (existId) { obj.id = existId; toKeepIds.push(existId); toUpdate.push(obj); } else toInsert.push(obj);
-  });
-  const oldIds = materials.filter(m => m.task_id === taskId).map(m => m.id);
-  const toDelete = oldIds.filter(id => !toKeepIds.includes(id));
-  if (toDelete.length) await sb.from('materials').delete().in('id', toDelete);
-  if (toInsert.length) { const { error } = await sb.from('materials').insert(toInsert); if (error) { showToast('Errore: ' + error.message,'error'); return; } }
-  for (const m of toUpdate) { const { error } = await sb.from('materials').update({ name: m.name, quantity: m.quantity, unit: m.unit }).eq('id', m.id); if (error) { showToast('Errore: ' + error.message,'error'); return; } }
-  closeModal(); await loadWeek(); showSaved();
 }
 
 // ── OPERATORI (SQUADRE) ─────────────────────
@@ -473,50 +411,6 @@ async function saveSquads() {
   const keepIds = toUpdate.map(s=>s.id); const oldIds = squads.map(s=>s.id);
   const toDel = oldIds.filter(id => !keepIds.includes(id));
   if (toDel.length) await sb.from('squads').delete().in('id', toDel);
-  await loadStatic(); closeModal(); renderCalendar(); showSaved();
-}
-
-// ── CANTIERI ─────────────────────────────────
-function openSitesModal() {
-  const rows = sites.map(s => `
-    <div class="edit-row" data-id="${s.id}">
-      <input type="text" value="${escHtml(s.name)}" class="e-name" placeholder="Nome cantiere/cliente" style="flex:1">
-      <input type="text" value="${escHtml(s.notes||'')}" class="e-notes" placeholder="Note" style="flex:1">
-      <label class="chk"><input type="checkbox" class="e-active" ${s.active !== false ? 'checked' : ''}> attivo</label>
-      <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
-    </div>`).join('');
-  showModal(`
-    <div class="modal-title">🏗 Gestione cantieri/clienti</div>
-    <div id="edit-list">${rows}</div>
-    <button class="btn-add-mat" onclick="addSiteRow()" style="margin-top:8px">+ aggiungi cantiere</button>
-    <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">Annulla</button><button class="btn-save" onclick="saveSites()">Salva</button></div>
-  `);
-}
-function addSiteRow() {
-  const div = document.createElement('div');
-  div.innerHTML = `<div class="edit-row" data-id="">
-    <input type="text" value="" class="e-name" placeholder="Nome cantiere/cliente" style="flex:1">
-    <input type="text" value="" class="e-notes" placeholder="Note" style="flex:1">
-    <label class="chk"><input type="checkbox" class="e-active" checked> attivo</label>
-    <button class="rm-mat" onclick="this.parentElement.remove()">✕</button>
-  </div>`;
-  document.getElementById('edit-list').appendChild(div.firstElementChild);
-}
-async function saveSites() {
-  const rows = document.querySelectorAll('#edit-list .edit-row');
-  const toInsert = [], toUpdate = [];
-  rows.forEach(r => {
-    const name = r.querySelector('.e-name').value.trim();
-    if (!name) return;
-    const id = r.dataset.id;
-    const obj = { name, notes: r.querySelector('.e-notes').value.trim() || null, active: r.querySelector('.e-active').checked };
-    if (id) { obj.id = id; toUpdate.push(obj); } else toInsert.push(obj);
-  });
-  if (toInsert.length) { const { error } = await sb.from('sites').insert(toInsert); if (error) { showToast('Errore: '+error.message,'error'); return; } }
-  for (const s of toUpdate) { const { error } = await sb.from('sites').update({ name:s.name, notes:s.notes, active:s.active }).eq('id', s.id); if (error) { showToast('Errore: '+error.message,'error'); return; } }
-  const keepIds = toUpdate.map(s=>s.id); const oldIds = sites.map(s=>s.id);
-  const toDel = oldIds.filter(id => !keepIds.includes(id));
-  if (toDel.length) await sb.from('sites').delete().in('id', toDel);
   await loadStatic(); closeModal(); renderCalendar(); showSaved();
 }
 
@@ -573,20 +467,16 @@ function openSettingsModal() {
       <select id="set-fs-op"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
     <div class="settings-row"><label>Dimensione testo — Task</label>
       <select id="set-fs-task"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
-    <div class="settings-row"><label>Dimensione testo — Cantieri</label>
-      <select id="set-fs-site"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
     <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">Annulla</button><button class="btn-save" onclick="saveSettings()">Salva</button></div>
   `);
   document.getElementById('set-fs-op').value = settingsRow.font_size_operators || 'medium';
   document.getElementById('set-fs-task').value = settingsRow.font_size_tasks || 'medium';
-  document.getElementById('set-fs-site').value = settingsRow.font_size_sites || 'medium';
 }
 async function saveSettings() {
   const obj = {
     background_color: document.getElementById('set-bg').value,
     font_size_operators: document.getElementById('set-fs-op').value,
-    font_size_tasks: document.getElementById('set-fs-task').value,
-    font_size_sites: document.getElementById('set-fs-site').value
+    font_size_tasks: document.getElementById('set-fs-task').value
   };
   const { error } = await sb.from('settings').update(obj).eq('id', 1);
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
@@ -615,21 +505,14 @@ async function runSearch(q) {
   const mySeq = ++searchSeq;
   renderSearchState('loading');
   const pattern = `%${q.replace(/[%_]/g, c => '\\'+c)}%`;
-  const [titleRes, notesRes, matRes] = await Promise.all([
+  const [titleRes, notesRes] = await Promise.all([
     sb.from('tasks').select('id,title,notes,date,squad_id').ilike('title', pattern).limit(40),
-    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('notes', pattern).limit(40),
-    sb.from('materials').select('id,name,quantity,unit,task_id').ilike('name', pattern).limit(40)
+    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('notes', pattern).limit(40)
   ]);
   if (mySeq !== searchSeq) return;
   const resultMap = new Map();
   (titleRes.data||[]).forEach(t => resultMap.set(t.id, { task:t, matchedField:'title', matchedText:t.title }));
   (notesRes.data||[]).forEach(t => { if (!resultMap.has(t.id)) resultMap.set(t.id, { task:t, matchedField:'notes', matchedText:t.notes }); });
-  const matList = matRes.data || [];
-  const missing = [...new Set(matList.map(m=>m.task_id).filter(id=>!resultMap.has(id)))];
-  let extra = [];
-  if (missing.length) { const { data } = await sb.from('tasks').select('id,title,notes,date,squad_id').in('id', missing); extra = data || []; }
-  extra.forEach(t => resultMap.set(t.id, { task:t, matchedField:null, matchedText:null }));
-  matList.forEach(m => { const entry = resultMap.get(m.task_id); if (entry && !entry.matSnippet) entry.matSnippet = m.name + (m.quantity?' '+m.quantity:'') + (m.unit?' '+m.unit:''); });
   if (!resultMap.size) { renderSearchState('empty'); return; }
   renderSearchResults([...resultMap.values()], q);
 }
@@ -640,7 +523,6 @@ function renderSearchResults(entries, q) {
     const t = e.task; const sq = squads.find(s => s.id === t.squad_id);
     let snippetHtml = '';
     if (e.matchedField === 'notes') snippetHtml = highlightMatch(snippetAround(e.matchedText, q, 40), q);
-    else if (e.matSnippet) snippetHtml = '🧰 ' + highlightMatch(e.matSnippet, q);
     return `<div class="sr-item" onclick='goToSearchResult(${JSON.stringify(t.date)}, ${JSON.stringify(t.id)})'>
       <div class="sr-item-top"><span class="sr-squad-dot" style="background:${sq?sq.color:'#888'}"></span><span class="sr-title">${highlightMatch(t.title,q)}</span></div>
       <div class="sr-meta">${sq?escHtml(sq.name):''} · ${t.date.split('-').reverse().join('/')}</div>
@@ -662,7 +544,6 @@ async function goToSearchResult(dateStr, taskId) {
 function subscribeRealtime() {
   sb.channel('manager-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadWeek())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => loadWeek())
     .subscribe();
 }
 
@@ -670,8 +551,7 @@ function subscribeRealtime() {
 function showModal(html) {
   closeModal();
   const ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'modal-ov';
-  ov.innerHTML = `<div class="modal">${html}</div>
-    <datalist id="units-list"><option value="pz"><option value="m"><option value="m²"><option value="kg"><option value="lt"><option value="ml"><option value="rotoli"><option value="sacchi"></datalist>`;
+  ov.innerHTML = `<div class="modal">${html}</div>`;
   ov.addEventListener('click', e => { if (e.target === ov) closeModal(); });
   document.body.appendChild(ov);
   setTimeout(() => { const el = ov.querySelector('[autofocus]'); if (el) el.focus(); }, 50);

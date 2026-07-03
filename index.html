@@ -21,7 +21,6 @@
   --today:   #d4a843;
   --fs-op:    18px;
   --fs-task:  16px;
-  --fs-site:  13px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-b); overflow: hidden; }
@@ -100,9 +99,6 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .task-card { border-radius: 8px; padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; border: 1px solid transparent; }
 .task-card-title { font-size: var(--fs-task); font-weight: 600; line-height: 1.3; }
 .task-card-notes { font-size: calc(var(--fs-task) - 2px); opacity: .9; color: #ffffff; font-weight: 500; line-height: 1.3; }
-.task-card-site { font-size: var(--fs-site); opacity: .7; }
-.task-card-mats { margin-top: 3px; }
-.mat-tag { display: inline-block; background: rgba(0,0,0,.25); border-radius: 4px; padding: 2px 8px; font-size: calc(var(--fs-site) - 1px); margin: 1px 3px 1px 0; }
 .empty-cell { color: #ffffff; font-size: 13px; font-weight: 600; padding: 4px 0; opacity: .35; }
 .holiday-flag { color: #e05555; font-size: 13px; font-weight: 700; opacity: .8; }
 
@@ -169,8 +165,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 // ══════════════════════════════════════════
 // CONFIGURAZIONE — stesso progetto Supabase del manager
 // ══════════════════════════════════════════
-const SUPABASE_URL      = 'https://wdepuzaorntgbbvghgun.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_VvLFT1S5qMolUs4007bcNA_rzIHVxFU';
+const SUPABASE_URL      = 'INSERISCI_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'INSERISCI_SUPABASE_ANON_KEY';
 // ══════════════════════════════════════════
 
 const { createClient } = supabase;
@@ -178,7 +174,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const DAY_NAMES = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
 let anchorDate = todayMidnight();
-let squads = [], sites = [], holidays = [], tasks = [], materials = [];
+let squads = [], holidays = [], tasks = [];
 
 function todayMidnight() { const d = new Date(); d.setHours(0,0,0,0); return d; }
 function fmtDate(d) { return d.toISOString().slice(0,10); }
@@ -207,13 +203,11 @@ async function startApp() {
 }
 
 async function loadStatic() {
-  const [sq, st, hd] = await Promise.all([
+  const [sq, hd] = await Promise.all([
     sb.from('squads').select('*').order('sort_order'),
-    sb.from('sites').select('*'),
     sb.from('holidays').select('*')
   ]);
   squads = (sq.data || []).filter(s => s.active !== false);
-  sites = st.data || [];
   holidays = hd.data || [];
 }
 
@@ -232,9 +226,6 @@ async function loadView(dir=0) {
   const from = fmtDate(d1), to = fmtDate(d2);
   const { data: tk } = await sb.from('tasks').select('*').gte('date', from).lte('date', to);
   tasks = tk || [];
-  const ids = tasks.map(t => t.id);
-  if (ids.length) { const { data: mt } = await sb.from('materials').select('*').in('task_id', ids).order('sort_order'); materials = mt || []; }
-  else materials = [];
   renderView(dir);
   loading.style.display = 'none';
 }
@@ -286,13 +277,9 @@ function renderView(dir) {
 }
 
 function taskCardHtml(t, sq) {
-  const mats = materials.filter(m => m.task_id === t.id);
-  const site = sites.find(s => s.id === t.site_id);
   return `<div class="task-card" data-task-id="${t.id}" style="background:${sq.color}22;border-color:${sq.color}55;color:${sq.color}">
     <div class="task-card-title">${escHtml(t.title)}</div>
     ${t.notes ? `<div class="task-card-notes">${escHtml(t.notes)}</div>` : ''}
-    ${site ? `<div class="task-card-site">🏗 ${escHtml(site.name)}</div>` : ''}
-    ${mats.length ? `<div class="task-card-mats">${mats.map(m => `<span class="mat-tag">${escHtml(m.name)}${m.quantity?` ${m.quantity}`:''}${m.unit?` ${escHtml(m.unit)}`:''}</span>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -328,21 +315,14 @@ async function runSearch(q) {
   const mySeq = ++searchSeq;
   renderSearchState('loading');
   const pattern = `%${q.replace(/[%_]/g, c => '\\'+c)}%`;
-  const [titleRes, notesRes, matRes] = await Promise.all([
+  const [titleRes, notesRes] = await Promise.all([
     sb.from('tasks').select('id,title,notes,date,squad_id').ilike('title', pattern).limit(40),
-    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('notes', pattern).limit(40),
-    sb.from('materials').select('id,name,quantity,unit,task_id').ilike('name', pattern).limit(40)
+    sb.from('tasks').select('id,title,notes,date,squad_id').ilike('notes', pattern).limit(40)
   ]);
   if (mySeq !== searchSeq) return;
   const resultMap = new Map();
   (titleRes.data||[]).forEach(t => resultMap.set(t.id, { task:t, matchedField:'title', matchedText:t.title }));
   (notesRes.data||[]).forEach(t => { if (!resultMap.has(t.id)) resultMap.set(t.id, { task:t, matchedField:'notes', matchedText:t.notes }); });
-  const matList = matRes.data || [];
-  const missing = [...new Set(matList.map(m=>m.task_id).filter(id=>!resultMap.has(id)))];
-  let extra = [];
-  if (missing.length) { const { data } = await sb.from('tasks').select('id,title,notes,date,squad_id').in('id', missing); extra = data || []; }
-  extra.forEach(t => resultMap.set(t.id, { task:t, matchedField:null, matchedText:null }));
-  matList.forEach(m => { const entry = resultMap.get(m.task_id); if (entry && !entry.matSnippet) entry.matSnippet = m.name + (m.quantity?' '+m.quantity:'') + (m.unit?' '+m.unit:''); });
   if (!resultMap.size) { renderSearchState('empty'); return; }
   renderSearchResults([...resultMap.values()], q);
 }
@@ -353,7 +333,6 @@ function renderSearchResults(entries, q) {
     const t = e.task; const sq = squads.find(s => s.id === t.squad_id);
     let snippetHtml = '';
     if (e.matchedField === 'notes') snippetHtml = highlightMatch(snippetAround(e.matchedText, q, 40), q);
-    else if (e.matSnippet) snippetHtml = '🧰 ' + highlightMatch(e.matSnippet, q);
     return `<div class="sr-item" onclick='goToSearchResult(${JSON.stringify(t.date)}, ${JSON.stringify(t.id)})'>
       <div class="sr-item-top"><span class="sr-squad-dot" style="background:${sq?sq.color:'#888'}"></span><span class="sr-title">${highlightMatch(t.title,q)}</span></div>
       <div class="sr-meta">${sq?escHtml(sq.name):''} · ${t.date.split('-').reverse().join('/')}</div>
@@ -375,7 +354,6 @@ async function goToSearchResult(dateStr, taskId) {
 function subscribeRealtime() {
   sb.channel('viewer-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => { loadView(0); showToast('🔄 Calendario aggiornato'); })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => { loadView(0); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'holidays' }, () => loadStatic().then(() => loadView(0)))
     .subscribe();
 }

@@ -63,11 +63,13 @@ Nella pagina Manager, il link "Password dimenticata?" invia un'email di reset tr
 
 Vedi `supabase/schema.sql` per lo schema completo. Tabelle principali:
 - `squads` — operatori (nome, colore, attivo/disattivo, ordinamento)
-- `sites` — cantieri/clienti
 - `holidays` — festività/chiusure (con opzione ricorrenza annuale)
-- `tasks` — attività assegnate (operatore, data, titolo, note, cantiere collegato)
-- `materials` — tag materiali collegati a un task
+- `tasks` — attività assegnate (operatore, data, titolo = cantiere/cliente, note)
 - `settings` — riga singola con colore sfondo e dimensioni font
+
+> Il cantiere/cliente **non** è una tabella a parte: è semplicemente il campo "Titolo" del task, scritto liberamente dal manager (es. "Installazione presso Pippo Pluto"). Non ci sono materiali/tag associati ai task.
+
+Se avevi già eseguito lo schema originale su Supabase (con `sites` e `materials`), lancia una sola volta lo script `supabase/migrazione-rimuovi-cantieri-materiali.sql` nel SQL Editor per allinearlo.
 
 Tutte le tabelle sono protette da Row Level Security: i Manager hanno accesso completo, il Viewer solo in lettura.
 
