@@ -406,12 +406,28 @@ async function saveSquads() {
     const obj = { name, color: r.querySelector('.e-color').value, active: r.querySelector('.e-active').checked, sort_order: i };
     if (id) { obj.id = id; toUpdate.push(obj); } else toInsert.push(obj);
   });
-  if (toInsert.length) { const { error } = await sb.from('squads').insert(toInsert); if (error) { showToast('Errore: '+error.message,'error'); return; } }
-  for (const s of toUpdate) { const { error } = await sb.from('squads').update({ name:s.name, color:s.color, active:s.active, sort_order:s.sort_order }).eq('id', s.id); if (error) { showToast('Errore: '+error.message,'error'); return; } }
-  const keepIds = toUpdate.map(s=>s.id); const oldIds = squads.map(s=>s.id);
-  const toDel = oldIds.filter(id => !keepIds.includes(id));
-  if (toDel.length) await sb.from('squads').delete().in('id', toDel);
-  await loadStatic(); closeModal(); renderCalendar(); showSaved();
+  console.log('saveSquads → toInsert:', toInsert, 'toUpdate:', toUpdate);
+  try {
+    if (toInsert.length) {
+      const { data, error } = await sb.from('squads').insert(toInsert).select();
+      console.log('insert result:', data, error);
+      if (error) { showToast('Errore inserimento: ' + error.message, 'error'); return; }
+    }
+    for (const s of toUpdate) {
+      const { error } = await sb.from('squads').update({ name:s.name, color:s.color, active:s.active, sort_order:s.sort_order }).eq('id', s.id);
+      if (error) { showToast('Errore aggiornamento "'+s.name+'": ' + error.message, 'error'); return; }
+    }
+    const keepIds = toUpdate.map(s=>s.id); const oldIds = squads.map(s=>s.id);
+    const toDel = oldIds.filter(id => !keepIds.includes(id));
+    if (toDel.length) {
+      const { error } = await sb.from('squads').delete().in('id', toDel);
+      if (error) { showToast('Errore eliminazione: ' + error.message, 'error'); return; }
+    }
+    await loadStatic(); closeModal(); renderCalendar(); showSaved();
+  } catch (err) {
+    console.error('saveSquads exception:', err);
+    showToast('Errore imprevisto: ' + err.message, 'error');
+  }
 }
 
 // ── FESTIVITÀ ────────────────────────────────
