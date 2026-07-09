@@ -93,6 +93,10 @@ thead th:first-child { width: 160px; }
 thead th.holiday-col { color: var(--danger); }
 thead th .day-date { display: block; font-size: 11px; color: #fff; font-weight: 700; margin-top: 2px; font-family: var(--font-b); text-transform: none; letter-spacing: 0; }
 thead th .holiday-label { display: block; font-size: 10px; color: var(--danger); font-weight: 700; margin-top: 2px; }
+.day-head-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.day-note-btn { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 4px; flex-shrink: 0; }
+.day-note-btn:hover { color: var(--accent); background: rgba(212,168,67,.12); }
+.day-note-preview { display: block; font-size: 10px; color: var(--accent); font-weight: 500; margin-top: 4px; text-transform: none; letter-spacing: 0; white-space: normal; line-height: 1.3; }
 tbody td { vertical-align: top; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 8px; min-width: 140px; }
 tbody td:first-child { background: var(--surface); border-right: 2px solid var(--border2); }
 tbody td.holiday-col { background: rgba(224,85,85,.05); }
@@ -104,6 +108,11 @@ tbody td.holiday-col { background: rgba(224,85,85,.05); }
 .task-pill:hover { border-color: rgba(255,255,255,.15); }
 .task-pill-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; }
 .task-title { flex: 1; font-weight: 500; }
+.time-badge { display: inline-block; background: rgba(0,0,0,.3); border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; margin-right: 5px; }
+.ts-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.ts-btn { background: var(--surface2); border: 1px solid var(--border2); color: #fff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 13px; font-family: var(--font-b); }
+.ts-btn:hover { border-color: var(--accent); }
+.ts-btn.active { background: var(--accent); border-color: var(--accent); color: #0c0c0a; }
 .task-actions { display: flex; gap: 2px; flex-shrink: 0; }
 .task-btn { background: rgba(0,0,0,.25); border: none; border-radius: 4px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,.6); font-size: 12px; }
 .task-btn:hover { background: rgba(0,0,0,.5); color: #fff; }
@@ -210,8 +219,8 @@ tbody td.holiday-col { background: rgba(224,85,85,.05); }
 // ══════════════════════════════════════════
 // CONFIGURAZIONE — inserisci i tuoi valori Supabase
 // ══════════════════════════════════════════
-const SUPABASE_URL      = 'https://wdepuzaorntgbbvghgun.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_VvLFT1S5qMolUs4007bcNA_rzIHVxFU';
+const SUPABASE_URL      = 'INSERISCI_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'INSERISCI_SUPABASE_ANON_KEY';
 // ══════════════════════════════════════════
 
 const { createClient } = supabase;
@@ -219,10 +228,10 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const DAYS = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
 let currentUser = null, currentMonday = mondayOf(new Date());
-let squads = [], holidays = [], tasks = [], settingsRow = {};
+let squads = [], holidays = [], tasks = [], dayNotes = [], settingsRow = {};
 
 function mondayOf(d) { const x = new Date(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); x.setHours(0,0,0,0); return x; }
-function fmtDate(d) { return d.toISOString().slice(0,10); }
+function fmtDate(d) { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function escHtml(s) { return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function isoWeekNum(d) { const t = new Date(d); t.setHours(0,0,0,0); t.setDate(t.getDate() + 3 - ((t.getDay()+6)%7)); const w1 = new Date(t.getFullYear(),0,4); return 1 + Math.round(((t-w1)/86400000 - 3 + ((w1.getDay()+6)%7))/7); }
@@ -287,10 +296,13 @@ async function loadWeek() {
   const from = fmtDate(currentMonday), to = fmtDate(addDays(currentMonday, 5));
   const { data: tk } = await sb.from('tasks').select('*').gte('date', from).lte('date', to);
   tasks = tk || [];
+  const { data: dn } = await sb.from('day_notes').select('*').gte('date', from).lte('date', to);
+  dayNotes = dn || [];
   renderCalendar();
   document.getElementById('cal-loading').style.display = 'none';
   document.getElementById('cal-table').style.display = 'table';
 }
+function getDayNote(dateStr) { return (dayNotes.find(n => n.date === dateStr) || {}).note || ''; }
 
 function isHoliday(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -304,8 +316,15 @@ function renderCalendar() {
 
   const headRow = document.getElementById('days-header');
   headRow.innerHTML = '<th>Squadra</th>' + DAYS.map((d, i) => {
-    const dt = addDays(monday, i); const ds = fmtDate(dt); const hol = isHoliday(ds);
-    return `<th class="${hol ? 'holiday-col' : ''}">${d}<span class="day-date">${dt.getDate()}/${dt.getMonth()+1}</span>${hol ? `<span class="holiday-label">${escHtml(hol.label||'Chiusura')}</span>` : ''}</th>`;
+    const dt = addDays(monday, i); const ds = fmtDate(dt); const hol = isHoliday(ds); const note = getDayNote(ds);
+    return `<th class="${hol ? 'holiday-col' : ''}">
+      <div class="day-head-top">
+        <span>${d}<span class="day-date">${dt.getDate()}/${dt.getMonth()+1}</span></span>
+        <button class="day-note-btn" title="Nota del giorno" onclick="openDayNoteModal('${ds}')">✎</button>
+      </div>
+      ${hol ? `<span class="holiday-label">${escHtml(hol.label||'Chiusura')}</span>` : ''}
+      ${note ? `<span class="day-note-preview">📝 ${escHtml(note)}</span>` : ''}
+    </th>`;
   }).join('');
 
   const body = document.getElementById('cal-body');
@@ -325,7 +344,7 @@ function taskPillHtml(t) {
   const sq = squads.find(s => s.id === t.squad_id);
   return `<div class="task-pill" data-task-id="${t.id}" style="background:${sq.color}22;color:${sq.color}">
     <div class="task-pill-top">
-      <span class="task-title">${escHtml(t.title)}</span>
+      <span class="task-title">${t.time_slot ? `<span class="time-badge">🕐 ${escHtml(t.time_slot)}</span>` : ''}${escHtml(t.title)}</span>
       <span class="task-actions">
         <button class="task-btn" title="Modifica" onclick="openTaskModal('${t.squad_id}','${t.date}','${t.id}')">✎</button>
         <button class="task-btn del" title="Elimina" onclick="deleteTask('${t.id}')">✕</button>
@@ -335,12 +354,17 @@ function taskPillHtml(t) {
 }
 
 // ── TASK CRUD ────────────────────────────────
+let _selectedTimeSlot = null;
 function openTaskModal(squadId, dateStr, taskId=null) {
   const t = taskId ? tasks.find(x => x.id === taskId) : null;
   const sq = squads.find(s => s.id === squadId);
+  _selectedTimeSlot = t ? (t.time_slot || null) : null;
+  const slots = [settingsRow.time_slot_1, settingsRow.time_slot_2, settingsRow.time_slot_3, settingsRow.time_slot_4].filter(Boolean);
+  const slotBtns = slots.map(s => `<button type="button" class="ts-btn ${s === _selectedTimeSlot ? 'active' : ''}" data-slot="${s}" onclick="pickTimeSlot('${s}')">${s}</button>`).join('');
   showModal(`
     <div class="modal-title">${t ? 'Modifica' : 'Nuovo'} task <span>— ${escHtml(sq.name)} · ${dateStr.split('-').reverse().join('/')}</span></div>
     <div class="form-group"><label>Cantiere / Cliente</label><input type="text" id="tk-title" value="${t ? escHtml(t.title) : ''}" placeholder="es. Installazione presso Pippo Pluto" autofocus></div>
+    <div class="form-group"><label>Fascia oraria (opzionale)</label><div class="ts-btns" id="ts-btns">${slotBtns}</div></div>
     <div class="form-group"><label>Note</label><textarea id="tk-notes" rows="3" placeholder="es. Puntuali alle 8.30 dal cliente, chiedere di Topolino">${t ? escHtml(t.notes||'') : ''}</textarea></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Annulla</button>
@@ -348,15 +372,20 @@ function openTaskModal(squadId, dateStr, taskId=null) {
     </div>
   `);
 }
+function pickTimeSlot(s) {
+  _selectedTimeSlot = (_selectedTimeSlot === s) ? null : s;
+  document.querySelectorAll('#ts-btns .ts-btn').forEach(b => b.classList.toggle('active', b.dataset.slot === _selectedTimeSlot));
+}
 async function saveTask(squadId, dateStr, taskId) {
   const title = document.getElementById('tk-title').value.trim();
   if (!title) { showToast('Il nome cantiere/cliente è obbligatorio', 'error'); return; }
   const notes = document.getElementById('tk-notes').value.trim();
+  const time_slot = _selectedTimeSlot;
   if (taskId) {
-    const { error } = await sb.from('tasks').update({ title, notes, updated_at: new Date().toISOString() }).eq('id', taskId);
+    const { error } = await sb.from('tasks').update({ title, notes, time_slot, updated_at: new Date().toISOString() }).eq('id', taskId);
     if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   } else {
-    const { error } = await sb.from('tasks').insert({ squad_id: squadId, date: dateStr, title, notes, created_by: currentUser.id });
+    const { error } = await sb.from('tasks').insert({ squad_id: squadId, date: dateStr, title, notes, time_slot, created_by: currentUser.id });
     if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   }
   closeModal(); await loadWeek(); showSaved();
@@ -430,6 +459,25 @@ async function saveSquads() {
   }
 }
 
+// ── NOTE DEL GIORNO ──────────────────────────
+function openDayNoteModal(dateStr) {
+  const note = getDayNote(dateStr);
+  showModal(`
+    <div class="modal-title">📝 Nota del giorno <span>— ${dateStr.split('-').reverse().join('/')}</span></div>
+    <div class="form-group"><textarea id="dn-note" rows="4" placeholder="es. Consegna materiali ore 6, cantiere Rossi chiuso al mattino..." autofocus>${escHtml(note)}</textarea></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Annulla</button>
+      <button class="btn-save" onclick="saveDayNote('${dateStr}')">Salva</button>
+    </div>
+  `);
+}
+async function saveDayNote(dateStr) {
+  const note = document.getElementById('dn-note').value.trim();
+  const { error } = await sb.from('day_notes').upsert({ date: dateStr, note, updated_at: new Date().toISOString() });
+  if (error) { showToast('Errore: ' + error.message, 'error'); return; }
+  closeModal(); await loadWeek(); showSaved();
+}
+
 // ── FESTIVITÀ ────────────────────────────────
 function openHolidaysModal() {
   const rows = holidays.map(h => `
@@ -483,6 +531,13 @@ function openSettingsModal() {
       <select id="set-fs-op"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
     <div class="settings-row"><label>Dimensione testo — Task</label>
       <select id="set-fs-task"><option value="small">Piccolo</option><option value="medium">Medio</option><option value="large">Grande</option></select></div>
+    <div style="border-top:1px solid var(--border);margin:16px 0 14px;padding-top:14px">
+      <label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Fasce orarie di inizio lavoro</label>
+      <div class="settings-row"><label>Fascia 1</label><input type="time" id="set-ts1" value="${settingsRow.time_slot_1 || '07:00'}"></div>
+      <div class="settings-row"><label>Fascia 2</label><input type="time" id="set-ts2" value="${settingsRow.time_slot_2 || '08:00'}"></div>
+      <div class="settings-row"><label>Fascia 3</label><input type="time" id="set-ts3" value="${settingsRow.time_slot_3 || '13:00'}"></div>
+      <div class="settings-row"><label>Fascia 4</label><input type="time" id="set-ts4" value="${settingsRow.time_slot_4 || '14:00'}"></div>
+    </div>
     <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()">Annulla</button><button class="btn-save" onclick="saveSettings()">Salva</button></div>
   `);
   document.getElementById('set-fs-op').value = settingsRow.font_size_operators || 'medium';
@@ -492,13 +547,18 @@ async function saveSettings() {
   const obj = {
     background_color: document.getElementById('set-bg').value,
     font_size_operators: document.getElementById('set-fs-op').value,
-    font_size_tasks: document.getElementById('set-fs-task').value
+    font_size_tasks: document.getElementById('set-fs-task').value,
+    time_slot_1: document.getElementById('set-ts1').value || '07:00',
+    time_slot_2: document.getElementById('set-ts2').value || '08:00',
+    time_slot_3: document.getElementById('set-ts3').value || '13:00',
+    time_slot_4: document.getElementById('set-ts4').value || '14:00'
   };
   const { error } = await sb.from('settings').update(obj).eq('id', 1);
   if (error) { showToast('Errore: ' + error.message, 'error'); return; }
   settingsRow = { ...settingsRow, ...obj };
   applySettings(); closeModal(); showSaved();
 }
+
 
 // ── RICERCA FULL-TEXT ────────────────────────
 let searchDebounce = null, searchSeq = 0;
@@ -560,6 +620,7 @@ async function goToSearchResult(dateStr, taskId) {
 function subscribeRealtime() {
   sb.channel('manager-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadWeek())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'day_notes' }, () => loadWeek())
     .subscribe();
 }
 
